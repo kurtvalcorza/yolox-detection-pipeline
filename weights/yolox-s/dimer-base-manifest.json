@@ -1,0 +1,17 @@
+{
+  "modelId": "Megvii-BaseDetection/YOLOX",
+  "revision": "0.1.1rc0",
+  "revisionKind": "github-release-tag",
+  "sourceUrl": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.pth",
+  "upstreamCodeRevision": "419778480ab6ec0590e5d3831b3afb3b46ab2aa3",
+  "license": "apache-2.0",
+  "modelKey": "yolox-s",
+  "files": [
+    {
+      "path": "yolox_s.pth",
+      "bytes": 72089125,
+      "sha256": "f55ded7181e1b0c13285c56e7790b8f0e8f8db590fe4edb37f0b7f345c913a30"
+    }
+  ],
+  "totalBytes": 72089125
+}
