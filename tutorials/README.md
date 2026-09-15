@@ -37,8 +37,9 @@ behind a default-off flag:
 12. Write every result as JSON with provenance.
 13. Optional BYOD: your own image, or your own labelled dataset through the same local stages.
 
-Expect roughly a few minutes on a hosted CPU runtime; on the reference machine the whole notebook took
-under a minute with the checkpoint pre-staged.
+Expect roughly a few minutes on a hosted CPU runtime; on the reference machine the committed notebook
+executed in 39.3 s with the checkpoint pre-staged and the pins already present, of which the fine-tune
+is about 26 s.
 
 ## Reading the numbers
 

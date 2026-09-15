@@ -207,5 +207,5 @@ These are recorded behaviour, not defects, and should survive future edits:
 
 | Date | Runtime | Notebook | Blob | Result |
 |---|---|---|---|---|
-| 2026-09-15 | Local Windows CPU kernel (Python 3.12.10, `torch 2.14.0+cu130`, GPU hidden), pre-staged checkpoint, pins already present | `yolox_detection_finetune_colab.ipynb` | `__LOCAL_ROW__` | **PASS** — 22/22 code cells, `__LOCAL_WALL__`; reproduced the smoke figures exactly (baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.8110 / AP50 1.0000, loss 6.288 → 1.662, artifact 462 tensors, fresh reload identical) |
+| 2026-09-15 | Local Windows CPU kernel (Python 3.12.10, `torch 2.14.0+cu130`, GPU hidden), pre-staged checkpoint, pins already present | `yolox_detection_finetune_colab.ipynb` | blob `dd48b2167af1f0e088fddd2de5be6a64a3bcd721` at commit `2f79037` (notebook records package revision `62fae0f`) | **PASS** — 22/22 code cells, 39.3 s; reproduced the smoke figures exactly (baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.8110 / AP50 1.0000, loss 6.28799 → 1.66196, COCO IoU 0.946/0.914/0.946/0.000/0.959, artifact 35,998,883 bytes over 462 tensors, fresh reload identical, all five new-data objects correctly labelled) |
 | — | Supported hosted runtime, cold start | — | — | **not yet run** (gate 6) |
