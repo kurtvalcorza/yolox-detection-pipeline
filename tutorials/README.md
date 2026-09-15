@@ -7,8 +7,8 @@
 | [`yolox_detection_finetune_colab.ipynb`](yolox_detection_finetune_colab.ipynb) | `E2E` | `GUIDED` | DIMER Notebook Specification 2.0 (standalone, §4) | yes | COCO detection, then validate → split → baseline → bounded SimOTA fine-tune → evaluate → new-data inference → export → fresh reload | CPU (GPU used automatically when present) | automatic, drawn in code | optional, two branches, both off by default | Candidate |
 
 Candidate status and the gates that remain open are recorded in
-[`../docs/release-verification.md`](../docs/release-verification.md); the local execution below is
-pre-flight evidence, not clean-runtime evidence.
+[`../docs/release-verification.md`](../docs/release-verification.md); clean-room execution on Kaggle Tesla T4 GPU is recorded in
+[`../docs/release-verification.md`](../docs/release-verification.md).
 
 ## What the notebook does
 
