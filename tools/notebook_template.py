@@ -185,7 +185,7 @@ TEMPLATE = {
             ),
             "code": (
                 "chw, ratio = preprocess(scene)\n"
-                "rgb_tensor = torch.from_numpy(chw[::-1].copy()).unsqueeze(0)\n"
+                "rgb_tensor = torch.from_numpy(chw[::-1].copy()).unsqueeze(0).to(pipe.device)\n"
                 "with torch.no_grad():\n"
                 "    rgb_raw = pipe.model(rgb_tensor)\n"
                 "rgb_kept = postprocess(rgb_raw, len(LABELS), conf_thre=threshold, nms_thre=nms_threshold)[0]\n"

@@ -71,7 +71,7 @@ CODE_MARKERS = (
     "threshold = 0.3",
     "nms_threshold = 0.3",
     # The channel-order and degenerate-input probes.
-    "rgb_tensor = torch.from_numpy(chw[::-1].copy()).unsqueeze(0)",
+    "rgb_tensor = torch.from_numpy(chw[::-1].copy()).unsqueeze(0).to(pipe.device)",
     "('blank', blank_scene()), ('noise', noise_scene(0))",
     # E2E stages: sample data -> validate -> split -> baseline -> fine-tune -> evaluate.
     "records = sign_dataset(N_IMAGES, seed=DATASET_SEED)",
