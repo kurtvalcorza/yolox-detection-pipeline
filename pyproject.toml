@@ -1,0 +1,48 @@
+[project]
+name = "yolox-detection-pipeline"
+version = "0.1.0"
+description = "DIMER inference and bounded fine-tuning pipeline for YOLOX-S anchor-free object detection"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Kurt Valcorza" }]
+# The model code is vendored (see docs/UPSTREAM.md), so the runtime is torch, torchvision, numpy and
+# Pillow only: no transformers, no huggingface-hub (the checkpoint comes from a GitHub release asset
+# over urllib), no opencv, no loguru, and deliberately not the `yolox` distribution itself.
+dependencies = [
+  "torch==2.14.0",
+  "torchvision==0.29.0",
+  "numpy==2.5.3",
+  "pillow==11.3.0",
+]
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "ruff==0.16.6"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[tool.hatch.build.targets.wheel]
+packages = ["src/yolox_detection_pipeline"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+# Vendored upstream YOLOX modules are kept byte-identical to the pinned revision apart from the three
+# edits declared in docs/UPSTREAM.md, so they are neither linted nor formatted here: a lint fix would
+# silently fork them from upstream and break `tools/vendor_upstream.py --check`.
+extend-exclude = [
+  "src/yolox_detection_pipeline/coco_classes.py",
+  "src/yolox_detection_pipeline/darknet.py",
+  "src/yolox_detection_pipeline/losses.py",
+  "src/yolox_detection_pipeline/network_blocks.py",
+  "src/yolox_detection_pipeline/ops.py",
+  "src/yolox_detection_pipeline/yolo_head.py",
+  "src/yolox_detection_pipeline/yolo_pafpn.py",
+  "src/yolox_detection_pipeline/yolox.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
