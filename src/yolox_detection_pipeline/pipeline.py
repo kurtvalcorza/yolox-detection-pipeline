@@ -754,8 +754,10 @@ class YoloxDetectionPipeline:
     ) -> YoloxDetectionPipeline:
         """Rebuild an adapted pipeline from an exported artifact, in a process that never fine-tuned.
 
-        The artifact records its own format tag, class vocabulary and the digest of the base weights
-        it started from; a mismatch raises rather than silently loading a different model.
+        The artifact records its own format tag, pinned identity, model key, class vocabulary and the
+        digest of the base weights it started from; a mismatch raises rather than silently loading a
+        different model. The model key matters because every YOLOX variant is an asset of the same
+        upstream release, so the id and revision alone do not say which network the weights are for.
         """
         import torch
 
@@ -767,6 +769,15 @@ class YoloxDetectionPipeline:
             raise ValueError(
                 f"artifact was built on {payload.get('model_id')}@{payload.get('model_revision')}, "
                 f"package pins {MODEL_ID}@{MODEL_REVISION}"
+            )
+        # MODEL_KEY, not just the model id and revision: the YOLOX variants are all assets of the
+        # same upstream release, so `Megvii-BaseDetection/YOLOX@0.1.1rc0` does not identify which
+        # network an artifact belongs to. Without this, a sibling variant's adapter passes the
+        # identity check and fails afterwards inside load_state_dict with a tensor-shape error.
+        if payload.get("model_key") != MODEL_KEY:
+            raise ValueError(
+                f"artifact was built on the {payload.get('model_key')!r} variant, "
+                f"package pins {MODEL_KEY!r}"
             )
         names = tuple(payload["class_names"])
         model = cls._build(len(names))
