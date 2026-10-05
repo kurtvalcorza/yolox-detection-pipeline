@@ -62,6 +62,16 @@ their upstream names in this flat package.
    +                    warnings.warn(
    ```
 
+## Upstream comments carried verbatim
+
+The vendored files keep upstream's comments unchanged, so the digests above stay checkable. One of them
+reaches the notebook as a literal placeholder marker: `yolo_head.py` (Section 2 of the tutorial) carries
+upstream's `# TODO: the string might change, consider a better way` on the line that compares a device
+type string. It is upstream's note about its own code, not unfinished DIMER content; rewording it would
+fork the vendored tree and break `tools/vendor_upstream.py --check`. The validator excludes the vendored
+modules from its placeholder scan for the same reason (2026-10-05 review, YXD-m1). No other `TODO`,
+`TBD` or `FIXME` marker appears in the notebook.
+
 ## Deliberately not vendored
 
 - `yolox/models/build.py` — `create_yolox_model` fetches a checkpoint with

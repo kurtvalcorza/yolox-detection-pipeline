@@ -1,6 +1,6 @@
 """Static release-asset validation for the YOLOX-S detection and fine-tuning DIMER pipeline.
 
-Checks the STANDALONE tutorial notebook (DIMER Notebook Specification 2.0 §4), the tutorial
+Checks the STANDALONE tutorial notebook (DIMER Notebook Specification 2.2 §4), the tutorial
 registry, model card, README, STATUS.md and weight documentation for source conformance and
 cross-document identity consistency, and runs the generator parity checks (PAR1–PAR3).
 
@@ -88,6 +88,16 @@ CODE_MARKERS = (
     "reloaded = YoloxDetectionPipeline.load_artifact(artifact_path)",
     "reloaded_metrics = reloaded.evaluate(held_out)",
     "assert abs(reloaded_metrics['ap'] - adapted['ap']) < 1e-9",
+    # YXD-M2: a real BYOD dataset path through adaptation, reload and a result JSON; YXD-m3: image by path.
+    "byod_records = read_detection_records(dataset_dir)",
+    "byod_reloaded_metrics = YoloxDetectionPipeline.load_artifact(byod_artifact).evaluate(byod_held)",
+    "BYOD_DATASET_DIR = \"\"",
+    "BYOD_IMAGE_PATH = \"\"",
+    "byod_image = load_byod_image(name, data)",
+    "if len(uploaded) != 1:",
+    # YXD-m2: the fine-tune cell starts from the verified base every time.
+    "finetune_started = time.perf_counter()",
+    "run_history.append(",
     # Provenance in the export.
     "'upstream_code_revision': UPSTREAM_CODE_REVISION, 'release_asset': RELEASE_ASSET_URL,",
     "'device': adapter.device",
@@ -102,8 +112,15 @@ MARKDOWN_MARKERS = (
     "**Keep the two vocabularies apart.**",
     "**The baseline is not zero, and that is the interesting part.**",
     "**The backbone is frozen.**",
-    "**Expect one honest failure.**",
-    "the evaluation report records it as a zero",
+    "the evaluation report records a miss as a zero",
+    "**Every run of this cell starts from the verified base.**",
+    "## How to use this notebook",
+    "<strong>Glossary</strong>",
+    "**Predict before running:**",
+    "<summary>Check your reasoning</summary>",
+    "## 14. Activity: change one thing — unfreeze the backbone",
+    "## Troubleshooting",
+    "## Conclusion (your notes)",
     "not a detection benchmark",
     "**The misses are the useful part.**",
     "AP@[.50:.95]",
@@ -132,10 +149,10 @@ FORBIDDEN_OUTSIDE_MODULE = (
 # ---------------------------------------------------------------------------
 # Shared checks. Everything below is source/structure validation only. Passing
 # these checks is NOT clean-runtime execution evidence under DIMER Notebook
-# Specification 2.0; see docs/release-verification.md for the release gate.
+# Specification 2.2; see docs/release-verification.md for the release gate.
 # ---------------------------------------------------------------------------
 
-NOTEBOOK_SPEC = "2.0"
+NOTEBOOK_SPEC = "2.2"
 ALLOWED_PROFILES = {"E2E", "ARTIFACT-INFERENCE", "TASK-INFERENCE", "MULTI-CAPABILITY", "SMOKE"}
 STATUS_TOKENS = ("Candidate", "Release-grade")
 PLACEHOLDER = re.compile(r"\b(TODO|TBD|FIXME)\b|Insert text here|Tooltip:", re.I)
@@ -172,10 +189,8 @@ REQUIRED_CARD_HEADINGS = [
 COMMON_CODE_MARKERS = (
     "PINS = [",
     "NOTEBOOK_SOURCE = {",
-    "SKIP_INSTALL = os.environ.get('DIMER_NOTEBOOK_CI_PREINSTALLED') == '1'",
-    "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', *PINS], check=True)",
-    "importlib.metadata.packages_distributions()",
-    "importlib.invalidate_caches()",
+    "LOCK_TEXT = r'" + "''",
+    "_ip.input_transformers_cleanup.append(_route_to_isolated_runtime)",
     "platform.python_version()",
     "torch.__version__",
     "MANIFEST = {",
@@ -674,17 +689,17 @@ def _validate_parity(
 
 
 def _validate_bootstrap_guard(path: Path, code_cells: list[tuple[int, str, ast.Module]]) -> None:
-    """The stale-import guard must actually raise: `if stale:` whose body raises RuntimeError."""
-    raises = False
-    for _, _, tree in code_cells:
-        for node in ast.walk(tree):
-            if isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "stale":
-                for sub in ast.walk(node):
-                    if isinstance(sub, ast.Raise) and isinstance(sub.exc, ast.Call):
-                        func = sub.exc.func
-                        if isinstance(func, ast.Name) and func.id == "RuntimeError":
-                            raises = True
-    _check(raises, f"{path.name}: install cell must raise RuntimeError when already-imported packages change")
+    """YXD-M1 (RUN1, RUN10, ENV6): nothing is pip-installed into the kernel and no cell asks for a restart. Exactly two
+    kernel cells exist: the isolated install (pinned uv by digest, managed CPython, hash lock with --require-hashes
+    --only-binary :all:) and the router that sends every later cell to the isolated worker."""
+    kernel_raw = [source for _index, source, _tree in code_cells if "# dimer: kernel cell" in source]
+    _check(len(kernel_raw) == 2, f"{path.name}: exactly two kernel cells (isolated install and router) are expected (YXD-M1)")
+    install = next((k for k in kernel_raw if "LOCK_TEXT = r" in k), "")
+    for needed in ('"--managed-python"', '"--require-hashes"', '"--only-binary"', '":all:"', "UV_SHA256", "LOCK_SHA256", 'platform.machine() != "x86_64"'):
+        _check(needed in install, f"{path.name}: the isolated install cell must use {needed} (YXD-M1)")
+    every = "\n".join(source for _index, source, _tree in code_cells)
+    _check("Restart the runtime" not in every, f"{path.name}: no cell may ask for a runtime restart (YXD-M1)")
+    _check("[sys.executable, '-m', 'pip'" not in every, f"{path.name}: nothing may be pip-installed into the kernel (YXD-M1)")
 
 
 def _validate_notebook_content(

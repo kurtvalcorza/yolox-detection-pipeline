@@ -13,7 +13,7 @@ evidence; only an execution recorded under "Recorded executions" is.
 | 3 | Notebook matches the package byte-for-byte | **met** — `tools/build_notebook.py --check` (PAR3) |
 | 4 | Static release-asset validation passes | **met** — `tools/validate_release_assets.py` |
 | 5 | Notebook executes top-to-bottom in a fresh **local** kernel | **met** — pre-flight only, recorded below |
-| 6 | Notebook executes top-to-bottom in a **supported hosted runtime** from a cold start | **met** — recorded below |
+| 6 | Notebook executes top-to-bottom in a **supported hosted runtime** from a cold start | **met** — recorded below. *2026-10-05 review (YXD-M1): the recorded Kaggle run needed one manual restart after the old install cell, so it is not one-pass evidence; the regenerated notebook (isolated `uv` environment, no restart) has not been run, and this gate needs re-qualification with `restarted: false` before it can support promotion. The state token is left for the maintainer.* |
 | 7 | Weights uploaded to the DIMER Model Repository | **open** — owner action |
 
 Gate 6 is what separates **Candidate** from **Release-grade**. The local run in gate 5 pre-staged the
@@ -210,3 +210,17 @@ These are recorded behaviour, not defects, and should survive future edits:
 | 2026-09-15 | Local Windows CPU kernel (Python 3.12.10, `torch 2.14.0+cu130`, GPU hidden), pre-staged checkpoint, pins already present | `yolox_detection_finetune_colab.ipynb` | blob `004d6442d06c32598fc7a34ed4f405d9d767de72` at commit `716194a` | **PASS** — 22/22 code cells, 28.2 s; reproduced the smoke figures exactly (baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.8110 / AP50 1.0000, loss 6.28799 → 1.66196, COCO IoU 0.946/0.914/0.946/0.000/0.959, artifact 35,998,883 bytes over 462 tensors, fresh reload identical, all five new-data objects correctly labelled) |
 | 2026-09-15 | Same runtime, superseded | `yolox_detection_finetune_colab.ipynb` | blob `dd48b2167af1f0e088fddd2de5be6a64a3bcd721` at commit `2f79037` | **PASS** — 22/22 code cells, 39.3 s, identical results. Superseded by the row above after `load_artifact` gained the variant check; kept because the record should show which blob was actually executed at the time. |
 | 2026-09-15 | Kaggle GPU kernel (`kurtvalcorza/dimer-nb2-yolox-detection-finetune` v1), fresh container assigned **Tesla T4** (driver 580.159.04), Python 3.12.13, Linux 6.12.90; committed notebook executed in fresh IPython interpreter via `nbclient 0.10.2` | `yolox_detection_finetune_colab.ipynb` | blob `5c09465debca9e836854b91e8b671e0728b03b67` at commit `8bcfda9` | **PASS** — 22/22 code cells, 182.3 s wall (pass 1: 155.2 s install + restart; pass 2: 27.0 s full run); reproduced smoke figures and geometry sanity: baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.8403 / AP50 1.0000, loss 6.2880 → 1.5985, 1,891,096 of 8,938,456 parameters trained, COCO IoU 0.946/0.914/0.946/0.000/0.959, artifact 35,998,883 bytes over 462 tensors, fresh reload identical (reloaded AP 0.8403 / AP50 1.0000), tampered artifact refused, all five new-data sign objects correctly detected (same-label IoU 0.871–0.943). 2 files, 72 MB staged (`yolox_s.pth`). |
+
+## 2026-10-05 review fixes — verification pending
+
+The 2026-10-05 review (`docs/reviews/2026-10-05-notebook-review/yolox_detection_finetune_colab_Review.md`) found that the Kaggle T4 row needed one manual restart after the in-kernel install cell, so gate 6 rests on a restarted run. The notebook was then regenerated (`yolox_detection_finetune_colab_Fixes.md`):
+- an isolated, hash-locked `uv` environment replaces the in-kernel install and its restart guard (spec 2.2);
+- the BYOD dataset branch now reads `annotations.json` from `BYOD_DATASET_DIR` or the upload dialog and runs adaptation, reload and a result JSON;
+- the guided layer was added;
+- Section 8 starts every run from the verified base.
+
+**No run of the regenerated blob is recorded.** The open gates are:
+- a one-pass hosted Run all recorded with `restarted: false`;
+- the REL12 BYOD journey.
+
+`STATUS.md` still describes only the local CPU run; it is left for the maintainer, who owns the status file.

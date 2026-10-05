@@ -4,7 +4,7 @@
 
 | Notebook | Profile | Mode | Spec | Standalone | Workflow | Runtime | Sample | BYOD | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| [`yolox_detection_finetune_colab.ipynb`](yolox_detection_finetune_colab.ipynb) | `E2E` | `GUIDED` | DIMER Notebook Specification 2.0 (standalone, §4) | yes | COCO detection, then validate → split → baseline → bounded SimOTA fine-tune → evaluate → new-data inference → export → fresh reload | CPU (GPU used automatically when present) | automatic, drawn in code | optional, two branches, both off by default | Candidate |
+| [`yolox_detection_finetune_colab.ipynb`](yolox_detection_finetune_colab.ipynb) | `E2E` | `GUIDED` | DIMER Notebook Specification 2.2 (standalone, §4; isolated `uv` environment, no runtime restart) | yes | COCO detection, then validate → split → baseline → bounded SimOTA fine-tune → evaluate → new-data inference → export → fresh reload | CPU (GPU used automatically when present) | automatic, drawn in code | optional, two branches, both off by default; image by `BYOD_IMAGE_PATH` or upload, dataset by `BYOD_DATASET_DIR` (`annotations.json` + images) or upload, through adaptation, reload and a result JSON | Candidate |
 
 Candidate status and the gates that remain open are recorded in
 [`../docs/release-verification.md`](../docs/release-verification.md); clean-room execution on Kaggle Tesla T4 GPU is recorded in
@@ -39,7 +39,7 @@ behind a default-off flag:
 
 Expect roughly a few minutes on a hosted CPU runtime; on the reference machine the committed notebook
 executed in 28.2 s with the checkpoint pre-staged and the pins already present, of which the fine-tune
-is about 26 s.
+is about 26 s. On a Kaggle T4 the previous version needed a restart after its install cell (155.2 s), then ran in 27.0 s; the regenerated notebook (2026-10-05 review fixes) installs into an isolated environment instead and has not been timed yet.
 
 ## Reading the numbers
 

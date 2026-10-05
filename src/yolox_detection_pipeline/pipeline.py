@@ -441,6 +441,63 @@ def validate_dataset(
     }
 
 
+def load_byod_image(name: str, data: bytes) -> Image.Image:
+    """Decode one BYOD image's bytes with Pillow, refusing an empty or undecodable file with a message that
+    names it. The result still has to pass ``validate_inputs``."""
+    import io
+
+    if not data:
+        raise ValueError(f"{name}: the file is empty")
+    try:
+        with Image.open(io.BytesIO(data)) as handle:
+            return handle.convert("RGB")
+    except Exception as exc:  # Pillow raises several error types for undecodable input
+        raise ValueError(f"{name}: not an image Pillow can decode ({type(exc).__name__}: {exc})") from exc
+
+
+def read_detection_records(directory: str | Path) -> list[dict[str, Any]]:
+    """Read BYOD adaptation records from ``<directory>/annotations.json`` plus the image files it names.
+
+    ``annotations.json`` is a list of ``{"file": "relative/name.png", "boxes": [[x0, y0, x1, y1], ...],
+    "labels": [name, ...]}`` objects, boxes in that image's own pixels. File names must stay inside
+    ``directory``: absolute paths and ``..`` segments are refused before any image is opened, and a missing
+    or undecodable image is refused by name. The result still has to pass ``validate_dataset``.
+    """
+    root = Path(directory).resolve()
+    index_path = root / "annotations.json"
+    if not index_path.is_file():
+        raise FileNotFoundError(f"{index_path} not found; expected annotations.json next to the images")
+    with open(index_path, encoding="utf-8") as fh:
+        entries = json.load(fh)
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("annotations.json must hold a non-empty list of records")
+    if len(entries) > MAX_TRAIN_IMAGES:
+        raise ValueError(
+            f"annotations.json lists {len(entries)} records > MAX_TRAIN_IMAGES {MAX_TRAIN_IMAGES}"
+        )
+    records: list[dict[str, Any]] = []
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict) or not {"file", "boxes", "labels"} <= set(entry):
+            raise ValueError(f"annotations.json entry {idx} must have 'file', 'boxes' and 'labels'")
+        relative = Path(str(entry["file"]))
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(
+                f"annotations.json entry {idx}: file {entry['file']!r} must be relative to {root}"
+            )
+        image_path = (root / relative).resolve()
+        if root not in image_path.parents:
+            raise ValueError(f"annotations.json entry {idx}: file {entry['file']!r} resolves outside {root}")
+        if not image_path.is_file():
+            raise FileNotFoundError(
+                f"annotations.json entry {idx}: image {entry['file']!r} not found in {root}"
+            )
+        image = load_byod_image(str(relative), image_path.read_bytes())
+        records.append(
+            {"image": image, "boxes": entry["boxes"], "labels": entry["labels"], "id": str(relative)}
+        )
+    return records
+
+
 def split_records(
     records: Sequence[Mapping[str, Any]],
     *,
