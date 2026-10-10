@@ -251,3 +251,18 @@ def test_m3_cancelled_or_multi_file_upload_stops_with_the_rule(notebook: dict, t
         monkeypatch.setitem(sys.modules, name, module)
     with pytest.raises(RuntimeError, match=rf"Upload exactly one image \(received {len(uploads)}\)"):
         exec(_byod_cell(notebook, **{"USE_BYOD_IMAGE = False": "USE_BYOD_IMAGE = True"}), ns)  # noqa: S102
+
+
+# ---- m3 (status half): STATUS.md, README and the record agree on the restarted hosted run ---------------------------
+
+
+def test_m3_status_and_record_agree_the_restarted_hosted_run_is_not_one_pass_evidence() -> None:
+    status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8").split("## Release status", 1)[1]
+    record = (ROOT / "docs" / "release-verification.md").read_text(encoding="utf-8")
+    assert "Current status: **Candidate**" in status
+    for text in (status, readme):
+        assert "Kaggle T4" in text and "manual restart" in text and "not one-pass" in text
+    gate6 = next(line for line in record.splitlines() if line.startswith("| 6 |"))
+    assert "| **open**" in gate6 and "**met**" not in gate6
+    assert "PASS after a manual restart" in record

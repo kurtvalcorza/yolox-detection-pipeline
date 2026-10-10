@@ -95,8 +95,10 @@ PYTHONPATH=src python tools/validate_release_assets.py
 
 **Candidate.** The package, its tests and the notebook are complete, and the notebook has been
 executed top-to-bottom once in a fresh local CPU kernel. That is pre-flight evidence, not
-supported-runtime evidence: promotion to Release-grade requires a clean-room execution recorded in
-[`docs/release-verification.md`](docs/release-verification.md).
+supported-runtime evidence. The recorded Kaggle T4 run of an earlier blob needed a manual restart
+after its install cell, so it is not one-pass evidence either; the regenerated notebook (isolated
+`uv` environment, no restart) has not been run on a hosted runtime yet. Promotion to Release-grade
+requires a clean-room execution recorded in [`docs/release-verification.md`](docs/release-verification.md).
 
 ## Licences
 
