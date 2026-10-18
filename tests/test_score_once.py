@@ -48,6 +48,7 @@ class _GridStub(_StubPipe):
         self.trained_with: tuple = ()
 
     def finetune(self, records, **kwargs):
+        EVENTS.append("train")
         if kwargs.get("epochs") in type(self).fail_epochs:
             raise RuntimeError("CUDA out of memory (stand-in)")
         out = super().finetune(records, **kwargs)
@@ -75,8 +76,26 @@ class _GridStub(_StubPipe):
         return out
 
 
+EVENTS: list[str] = []
+
+
 def _torch(available: bool, name: str = "Tesla T4"):
-    return types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: available, get_device_name=lambda index=0: name))
+    """A torch stand-in with the CUDA query and the amendment-2 determinism switches (calls are logged in EVENTS)."""
+    state = {"det": False, "warn_only": False}
+
+    def use_deterministic_algorithms(flag, warn_only=False):
+        state.update(det=bool(flag), warn_only=bool(warn_only))
+        EVENTS.append("deterministic")
+
+    return types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: available, get_device_name=lambda index=0: name,
+                                   manual_seed_all=lambda seed: None),
+        backends=types.SimpleNamespace(cudnn=types.SimpleNamespace(deterministic=False, benchmark=True)),
+        use_deterministic_algorithms=use_deterministic_algorithms,
+        are_deterministic_algorithms_enabled=lambda: state["det"],
+        is_deterministic_algorithms_warn_only_enabled=lambda: state["warn_only"],
+        manual_seed=lambda seed: None,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -177,7 +196,9 @@ def test_every_fixed_setting_is_in_the_preregistered_check() -> None:
 
 def test_recorded_evaluation_is_the_hosted_t4_record() -> None:
     """The 2026-10-18 Colab CLI T4 run (docs/execution-evidence/2026-10-18-ad795d2/), values as Section 9 printed them."""
-    record = protocol.RECORDED_EVALUATION
+    record = protocol.ROUND2_RECORDED_EVALUATION
+    assert protocol.RECORDED_EVALUATION is None  # amendment 2: no record on fresh test 3 yet
+    assert record["fresh_pool"] == protocol.EXPOSED_ROUND2_POOL == {"n": 200, "seed": 1160}
     assert record is not None and record["date"] == "2026-10-18" and record["device_class"] == "cuda-t4"
     assert record["commit"].startswith("ad795d2") and record["notebook_blob"].startswith("5fe2ef5d")
     assert record["selected_config"] == record["selected_system"] == "C1"
@@ -191,14 +212,14 @@ def test_recorded_evaluation_is_the_hosted_t4_record() -> None:
 
 def test_cpu_default_grid_off_trains_the_recorded_selection_and_is_exploratory(harness) -> None:
     run, ns, tmp = harness
-    ns["torch"] = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: False))
+    ns["torch"] = _torch(False)
     run()
     report = _report(tmp, "_exploratory_1")
     assert report["fresh_test"] is None and "run_grid" in report["settings_differing"]
     assert report["test_look"] == protocol.TEST_LOOK_EXPLORATORY and report["preregistered"] is False
     # The recorded selection follows the hosted record (ad795d2 selected C1): ten epochs at 1e-3.
     assert list(ns["grid_rows"]) == [protocol.RECORDED_SELECTION] == ["C1"]
-    assert protocol.RECORDED_EVALUATION["selected_config"] == protocol.RECORDED_SELECTION
+    assert protocol.ROUND2_RECORDED_EVALUATION["selected_config"] == protocol.RECORDED_SELECTION
     assert ns["grid_rows"]["C1"]["settings"]["epochs"] == 10 and ns["grid_rows"]["C1"]["settings"]["learning_rate"] == 1e-3
 
 
@@ -503,13 +524,13 @@ def test_device_class_helper() -> None:
 
 def test_with_the_record_the_first_run_in_a_new_runtime_is_a_reproduction_and_never_writes_the_main_files(harness, capsys) -> None:
     run, ns, tmp = harness
-    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION
+    ns["RECORDED_EVALUATION"] = protocol.ROUND2_RECORDED_EVALUATION
     run()
     assert not (tmp / f"{STEM}_evaluation_report.json").exists()
     assert not (tmp / f"{STEM}_fresh_test_per_image.json").exists()
     first = _report(tmp, "_reproduction_1")
     assert first["test_look"] == protocol.TEST_LOOK_REPRODUCTION == "reproduction" and first["preregistered"] is True
-    assert first["fresh_test"] is not None and first["recorded_evaluation"] == protocol.RECORDED_EVALUATION
+    assert first["fresh_test"] is not None and first["recorded_evaluation"] == protocol.ROUND2_RECORDED_EVALUATION
     comparison = first["record_comparison"]
     assert comparison["record"]["commit"].startswith("ad795d2") and comparison["matches"] is False
     assert "selected_ap" in comparison["differing"]  # the stand-in detector is not the record
@@ -523,7 +544,7 @@ def test_with_the_record_the_first_run_in_a_new_runtime_is_a_reproduction_and_ne
 
 def test_with_the_record_a_changed_setting_is_still_exploratory(harness) -> None:
     run, ns, tmp = harness
-    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION
+    ns["RECORDED_EVALUATION"] = protocol.ROUND2_RECORDED_EVALUATION
     run(**{"BATCH_SIZE = 2": "BATCH_SIZE = 1"})
     report = _report(tmp, "_exploratory_1")
     assert report["test_look"] == protocol.TEST_LOOK_EXPLORATORY and report["fresh_test"] is None
@@ -533,14 +554,14 @@ def test_with_the_record_a_changed_setting_is_still_exploratory(harness) -> None
 def test_ledger_plan_with_a_record_never_returns_the_main_slot(tmp_path) -> None:
     ledger = protocol.LookLedger(tmp_path / "work" / "ledger.json", tmp_path, STEM)
     assert ledger.plan("preregistered") == (protocol.TEST_LOOK_PREREGISTERED, "")
-    assert ledger.plan("preregistered", protocol.RECORDED_EVALUATION) == ("reproduction", "_reproduction_1")
+    assert ledger.plan("preregistered", protocol.ROUND2_RECORDED_EVALUATION) == ("reproduction", "_reproduction_1")
     ledger.record("preregistered", "_reproduction_1")
-    assert ledger.plan("preregistered", protocol.RECORDED_EVALUATION) == ("reproduction", "_reproduction_2")
-    assert ledger.plan("exploratory", protocol.RECORDED_EVALUATION) == (protocol.TEST_LOOK_EXPLORATORY, "_exploratory_1")
+    assert ledger.plan("preregistered", protocol.ROUND2_RECORDED_EVALUATION) == ("reproduction", "_reproduction_2")
+    assert ledger.plan("exploratory", protocol.ROUND2_RECORDED_EVALUATION) == (protocol.TEST_LOOK_EXPLORATORY, "_exploratory_1")
 
 
 def test_compare_with_record_reports_a_match_and_each_differing_field() -> None:
-    record = protocol.RECORDED_EVALUATION
+    record = protocol.ROUND2_RECORDED_EVALUATION
     fresh = {
         "selected": {"ap": 0.85731}, "baseline": {"ap": 0.13628}, "verdict": "improved",
         "bootstrap": {"primary_ap_difference": 0.72114, "primary_ap_ci95": [0.69834, 0.74349]},
@@ -568,3 +589,79 @@ def test_the_saved_per_image_tables_rerun_the_bootstrap_exactly(harness) -> None
     again = protocol.paired_bootstrap(selected, baseline, n_boot=200)
     assert again["primary_ap_ci95"] == report["fresh_test"]["bootstrap"]["primary_ap_ci95"]
     assert again["primary_ap_difference"] == report["fresh_test"]["bootstrap"]["primary_ap_difference"]
+
+
+# ---- round 3: amendment 2 (deterministic GPU training, fresh test 3) ----------------------------------------------
+
+
+def test_determinism_is_switched_on_before_any_training_and_recorded(harness) -> None:
+    run, ns, tmp = harness
+    EVENTS.clear()
+    run()
+    assert EVENTS[0] == "deterministic" and EVENTS.index("deterministic") < EVENTS.index("train")
+    report = _report(tmp)
+    assert report["determinism"] == protocol.DETERMINISM_EXPECTED == protocol.PREREGISTERED_SETTINGS["determinism"]
+    assert report["determinism"]["warn_only"] is False and report["determinism"]["cublas_workspace_config"] == ":4096:8"
+    assert ns["torch"].backends.cudnn.deterministic is True and ns["torch"].backends.cudnn.benchmark is False
+
+
+def test_changed_determinism_flags_are_exploratory(harness, monkeypatch) -> None:
+    run, ns, tmp = harness
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
+    run()
+    report = _report(tmp, "_exploratory_1")
+    assert "determinism" in report["settings_differing"] and report["fresh_test"] is None
+
+
+def test_an_op_without_a_deterministic_kernel_stops_the_grid(harness) -> None:
+    run, ns, tmp = harness
+
+    class _NoKernel(_GridStub):
+        def finetune(self, records, **kwargs):
+            raise RuntimeError("index_add_cuda_ does not have a deterministic implementation, but you set "
+                               "'torch.use_deterministic_algorithms(True)'")
+
+    ns[PIPELINE_CLASS] = _NoKernel
+    with pytest.raises(RuntimeError, match="no deterministic CUDA kernel; STOP"):
+        run()
+    assert not list(tmp.glob(f"{STEM}_evaluation_report*"))
+
+
+def test_two_identical_runs_print_the_same_grid_hash(harness, capsys) -> None:
+    run, ns, tmp = harness
+    run(sections=(6, 7, 8))
+    first = ns["GRID_HASH"]
+    run(sections=(8,))
+    assert ns["GRID_HASH"] == first and len(first) == 64
+    assert capsys.readouterr().out.count(f"grid hash {first}") == 2
+    assert protocol.grid_hash({"C0": {"val_ap": 1.0, "finetune_seconds": 1.0}}) == protocol.grid_hash({"C0": {"val_ap": 1.0, "finetune_seconds": 9.0}})
+    assert protocol.grid_hash({"C0": {"loss_curve": [2.0, 1.0]}}) != protocol.grid_hash({"C0": {"loss_curve": [2.0, 1.1]}})
+
+
+def test_masked_determinism_check_prints_the_hash_and_never_generates_fresh_test_3(harness, monkeypatch, capsys) -> None:
+    run, ns, tmp = harness
+    monkeypatch.setenv("DIMER_MASK_FRESH_TEST", "1")
+    run()
+    report = _report(tmp, "_masked_1")
+    assert report["grid_hash"] == ns["GRID_HASH"] and f"grid hash {ns['GRID_HASH']}" in capsys.readouterr().out
+    assert protocol.FRESH_TEST_POOL["seed"] not in ns["_seeds"] and report["fresh_test"] is None
+
+
+def test_the_first_fresh_test_3_scoring_is_the_preregistered_evaluation(harness) -> None:
+    run, ns, tmp = harness
+    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION  # the module value: None under amendment 2
+    run()
+    report = _report(tmp)
+    assert report["test_look"] == protocol.TEST_LOOK_PREREGISTERED and report["fresh_test_pool"] == {"n": 200, "seed": 1162}
+    assert protocol.FRESH_TEST_POOL["seed"] == 1162 and 1162 in ns["_seeds"] and 1160 not in ns["_seeds"]
+
+
+def test_fresh_test_3_is_pinned_and_disjoint_from_every_earlier_pool() -> None:
+    fresh3 = samples_module.sign_dataset(200, seed=1162)
+    assert protocol.pool_digest(fresh3) == protocol.FRESH_TEST_DIGEST
+    exposed2 = samples_module.sign_dataset(200, seed=1160)
+    assert protocol.pool_digest(exposed2) == protocol.EXPOSED_ROUND2_DIGEST
+    earlier = samples_module.sign_dataset(40, seed=0) + samples_module.sign_dataset(40, seed=1161) + exposed2 + samples_module.sign_dataset(3, seed=99)
+    assert not {protocol.record_digest(r) for r in fresh3} & {protocol.record_digest(r) for r in earlier}
+    assert not {protocol.layout_key(r) for r in fresh3} & {protocol.layout_key(r) for r in earlier}
+

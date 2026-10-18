@@ -20,6 +20,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -33,11 +34,14 @@ from .pipeline import ap_from_matches, prepared_matches
 
 # ---- pools (drawn by samples.sign_dataset; digests computed under the pinned Pillow 11.3.0) ------------------------
 VALIDATION_POOL = {"n": 40, "seed": 1161}
-FRESH_TEST_POOL = {"n": 200, "seed": 1160}
+# Amendment 2 (B2): fresh test 3. The round-2 fresh pool is now an exposed test, scored by the round-2 record.
+FRESH_TEST_POOL = {"n": 200, "seed": 1162}
+EXPOSED_ROUND2_POOL = {"n": 200, "seed": 1160}
 TRAINING_DIGEST = "60b0aaeea62cf9bb0498af03c1b99b43c644a4a09fee5e196e4d69dc9aef94bc"
 EXPOSED_DEV_TEST_DIGEST = "8729a7c00ce71282f406a899e88bc63b713795932240257de6545d82cb34eef8"
 VALIDATION_DIGEST = "a75c4381677c522178acfd3b16125c064bbc5b9514fce7a5d9d71f90d8e35a68"
-FRESH_TEST_DIGEST = "6900526c80ac2fbfd983b114d803512cbafca271250cab22ecd428fcbe9415ac"
+FRESH_TEST_DIGEST = "2c81a3b4929a8c74811cf47dfdedf3fe724800eb1e23d5fce884034c8af3c826"
+EXPOSED_ROUND2_DIGEST = "6900526c80ac2fbfd983b114d803512cbafca271250cab22ecd428fcbe9415ac"
 
 # ---- grid and selection --------------------------------------------------------------------------------------------
 GRID: tuple[dict[str, Any], ...] = (
@@ -46,8 +50,8 @@ GRID: tuple[dict[str, Any], ...] = (
     {"name": "C2", "epochs": 8, "learning_rate": 2e-3},
 )
 DEFAULT_CONFIG = "C0"
-# What a grid-off (CPU) run trains: the hosted record's selection (C1 in the 2026-10-18 T4 evaluation of record,
-# ad795d2; C0 before it). A grid-off run is exploratory either way.
+# What a grid-off (CPU) run trains: the round-2 record's selection (C1, ad795d2), kept until the amendment-2 record
+# exists (amendment 2, B3). A grid-off run is exploratory either way.
 RECORDED_SELECTION = "C1"
 TIE_ORDER = ("C0", "C2", "C1")  # exact ties go to the smaller config (fewer epochs)
 TIE_TOLERANCE = 1e-9
@@ -86,11 +90,13 @@ PREREGISTERED_SETTINGS: dict[str, Any] = {
     "keep_baseline_gain": KEEP_BASELINE_GAIN,
     # Amendment 1 (A1): the decision is taken on a hosted T4 only; any other device is exploratory.
     "device_class": "cuda-t4",
+    # Amendment 2 (B1): deterministic GPU training; checked like every other fixed setting.
+    "determinism": None,  # filled below from DETERMINISM_EXPECTED
 }
 
 # The hosted T4 run that is the evaluation of record (docs/release-verification.md, "Hosted T4 evaluation of record
 # (2026-10-18)"); values as printed by Section 9 of that run (4 decimals). Later identical runs are reproductions.
-RECORDED_EVALUATION: dict[str, Any] | None = {
+ROUND2_RECORDED_EVALUATION: dict[str, Any] = {
     "label": "pre-registered evaluation of record",
     "date": "2026-10-18",
     "runner": "Colab CLI, fresh hosted T4 session",
@@ -110,7 +116,69 @@ RECORDED_EVALUATION: dict[str, Any] | None = {
         "ci95": [0.6983, 0.7435],
         "verdict": "improved",
     },
+    "fresh_pool": dict(EXPOSED_ROUND2_POOL),
+    "status": "history: the round-2 record on fresh test 2 (amendment 2 made that pool an exposed test)",
 }
+# Amendment 2 (B3): the evaluation of record on fresh test 3. None until the first hosted T4 run under amendment 2
+# scores it, so that run is labelled "pre-registered evaluation (this runtime)".
+RECORDED_EVALUATION: dict[str, Any] | None = None
+
+# ---- amendment 2 (B1): determinism -------------------------------------------------------------------------------
+# cuBLAS reads this when its first handle is created, so it is set when this module is imported (Section 2), before
+# any CUDA work in the tutorial. A value set elsewhere is kept and reported, and then differs from the pre-registration.
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+DETERMINISM_EXPECTED: dict[str, Any] = {
+    "cublas_workspace_config": ":4096:8",
+    "cudnn_deterministic": True,
+    "cudnn_benchmark": False,
+    "deterministic_algorithms": True,
+    "warn_only": False,
+}
+PREREGISTERED_SETTINGS["determinism"] = dict(DETERMINISM_EXPECTED)
+
+
+def determinism_flags(torch_module: Any) -> dict[str, Any]:
+    """The determinism settings in force, as recorded in every report."""
+    try:
+        return {
+            "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+            "cudnn_deterministic": bool(torch_module.backends.cudnn.deterministic),
+            "cudnn_benchmark": bool(torch_module.backends.cudnn.benchmark),
+            "deterministic_algorithms": bool(torch_module.are_deterministic_algorithms_enabled()),
+            "warn_only": bool(torch_module.is_deterministic_algorithms_warn_only_enabled()),
+        }
+    except AttributeError:
+        return {"unavailable": True}
+
+
+def enable_determinism(torch_module: Any, seed: int) -> dict[str, Any]:
+    """Amendment 2 (B1): deterministic kernels everywhere, never `warn_only`; seed torch, numpy and random.
+
+    With these flags an op that has no deterministic CUDA kernel raises instead of running; Section 8 stops on that
+    error rather than recording the config as failed. Batches are built in-process, so there are no DataLoader
+    workers to seed."""
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    torch_module.backends.cudnn.deterministic = True
+    torch_module.backends.cudnn.benchmark = False
+    torch_module.use_deterministic_algorithms(True)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch_module.manual_seed(seed)
+    if torch_module.cuda.is_available():
+        torch_module.cuda.manual_seed_all(seed)
+    return determinism_flags(torch_module)
+
+
+def is_determinism_error(exc: BaseException) -> bool:
+    """True for torch's refusal to run an op that has no deterministic implementation."""
+    return "deterministic" in str(exc).lower() and isinstance(exc, RuntimeError)
+
+
+def grid_hash(rows: Mapping[str, Mapping[str, Any]]) -> str:
+    """sha256 over the grid rows without timings: two deterministic runs print the same hash."""
+    canonical = {name: {k: v for k, v in row.items() if k != "finetune_seconds"} for name, row in sorted(rows.items())}
+    return hashlib.sha256(json.dumps(canonical, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
 
 TEST_LOOK_PREREGISTERED = "pre-registered evaluation (this runtime)"
 TEST_LOOK_REPRODUCTION = "reproduction"
@@ -175,6 +243,7 @@ def config_record(
             "val_ap": float(validation["ap"]),
             "val_ap50": float(validation["ap50"]),
             "final_total_loss": float(run["history"][-1]["total_loss"]) if run.get("history") else None,
+            "loss_curve": [float(e["total_loss"]) for e in run.get("history", [])],
             "fingerprint": fingerprint,
         }
     )
