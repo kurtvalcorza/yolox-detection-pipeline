@@ -8,8 +8,9 @@ Two capabilities over one checkpoint:
 - **Detection** — the 80 COCO classes, score-ordered xyxy pixel boxes, caller-owned confidence and NMS
   thresholds.
 - **Adaptation** — a bounded SimOTA fine-tune that re-heads the detector onto your own class
-  vocabulary, scores it against a held-out split with COCO-style average precision, and exports a
-  single reloadable artifact.
+  vocabulary, chooses its configuration on a validation pool by a pre-registered grid
+  ([`docs/yolox-preregistration.md`](docs/yolox-preregistration.md)), scores a fresh test with COCO-style
+  average precision only under the pre-registered settings, and exports a single reloadable artifact.
 
 ```python
 from yolox_detection_pipeline import YoloxDetectionPipeline
@@ -97,7 +98,7 @@ PYTHONPATH=src python tools/validate_release_assets.py
 executed top-to-bottom once in a fresh local CPU kernel. That is pre-flight evidence, not
 supported-runtime evidence. The recorded Kaggle T4 run of an earlier blob needed a manual restart
 after its install cell, so it is not one-pass evidence either; the regenerated notebook (isolated
-`uv` environment, no restart) — blob `fe56cb6950f3` (commit `2c3d8bc`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-10 (Colab CLI 0.7.4 sequential execution, 24/24 code cells, 103.3 s; baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.7766 / AP50 1.0; fresh reload identical) — is the current one-pass record; status stays Candidate. Promotion to Release-grade
+`uv` environment, no restart) — blob `fe56cb6950f3` (commit `2c3d8bc`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-10 (Colab CLI 0.7.4 sequential execution, 24/24 code cells, 103.3 s; on the 10-image split now called the exposed development test, because the defaults were chosen on it: baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.7766 / AP50 1.0; fresh reload identical) — is the current one-pass record; status stays Candidate. Promotion to Release-grade
 requires a clean-room execution recorded in [`docs/release-verification.md`](docs/release-verification.md).
 
 ## Licences

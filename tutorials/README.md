@@ -30,8 +30,10 @@ behind a default-off flag:
 5. Probe channel order (BGR vs RGB) and degenerate inputs.
 6. Build and validate a 40-image labelled dataset over a three-class vocabulary that is not in COCO.
 7. Split it, re-head the detector, and measure a baseline **before** adapting.
-8. Run the bounded SimOTA fine-tune.
-9. Score the held-out split with COCO-style AP@[.50:.95] and AP50, against the baseline.
+8. Run the bounded SimOTA fine-tune: the pre-registered three-config grid on a GPU (chosen on a 40-image validation
+   pool), or the recorded selection C0 on a CPU (an exploratory run).
+9. Re-check every pre-registered setting, then score a 200-image fresh test against the baseline with a paired
+   image bootstrap; the 10-image exposed development test is shown for continuity and decides nothing.
 10. Detect on images from an unseen seed.
 11. Export the artifact, reload it from disk, and assert the reloaded model scores identically.
 12. Write every result as JSON with provenance.
@@ -45,8 +47,9 @@ is about 26 s. On a Kaggle T4 the previous version needed a restart after its in
 
 The notebook reports real measurements on **synthetic** data. Both the COCO demonstration scene and the
 adaptation dataset are drawn in code with Pillow — flat colours, hard edges, no lighting, no occlusion.
-A held-out AP50 of 1.0 after fine-tuning says the plumbing works and the task is easy; it is not
-evidence about photographs, and the much lower AP@[.50:.95] is the more honest summary. Upstream's
+An AP50 of 1.0 on the exposed development test says the plumbing works and the task is easy; it is not
+evidence about photographs, and AP@[.50:.95] is the more honest summary. Even the fresh test is the same
+renderer drawing the same shapes, so it measures in-distribution generalisation on drawn signs. Upstream's
 published 40.5 COCO mAP for YOLOX-S is neither reproduced nor checked.
 
 ## Regenerating
