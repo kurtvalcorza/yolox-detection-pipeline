@@ -4,9 +4,10 @@
 of them hold, the validation grid is complete and ran with them, the model in hand is the selected system, and the
 generated fresh pool matches its committed digest; only such a run scores the fresh test. Every other run is
 exploratory: validation and the labelled exposed development test only, written to `*_exploratory_<n>` files. A
-repeat of a pre-registered scoring in the same runtime is a reproduction and writes `*_reproduction_<n>` files; it
-never overwrites the first one. A runtime cannot see other runtimes: docs/release-verification.md says which hosted
-run is the evaluation of record (`RECORDED_EVALUATION`, None until that run exists).
+runtime cannot see other runtimes, so `RECORDED_EVALUATION` carries the hosted run that is the evaluation of record
+(docs/release-verification.md). Once it is set, every pre-registered scoring, including the first one in a new
+runtime, is a reproduction: it writes `*_reproduction_<n>` files, never the main files, and is compared with the
+record (`compare_with_record`). With no record, a repeat in the same runtime is the reproduction.
 
 Shared design for the YOLOX tutorials (rows 116 and 117): only `VALIDATION_POOL`, `FRESH_TEST_POOL` and the
 digests differ between the two repositories.
@@ -85,8 +86,29 @@ PREREGISTERED_SETTINGS: dict[str, Any] = {
     "device_class": "cuda-t4",
 }
 
-# The hosted T4 run that is the evaluation of record (date, notebook blob, numbers); None until it exists.
-RECORDED_EVALUATION: dict[str, Any] | None = None
+# The hosted T4 run that is the evaluation of record (docs/release-verification.md, "Hosted T4 evaluation of record
+# (2026-10-18)"); values as printed by Section 9 of that run (4 decimals). Later identical runs are reproductions.
+RECORDED_EVALUATION: dict[str, Any] | None = {
+    "label": "pre-registered evaluation of record",
+    "date": "2026-10-18",
+    "runner": "Colab CLI, fresh hosted T4 session",
+    "device_class": "cuda-t4",
+    "commit": "ad795d20747cd867e8f935295441e594b0944db3",
+    "notebook_blob": "5fe2ef5d4628ab20855ffbf011e76c9ed9891077",
+    "evidence": "docs/execution-evidence/2026-10-18-ad795d2/",
+    "selected_config": "C1",
+    "selected_system": "C1",
+    "validation_ap": {"baseline": 0.1767, "C0": 0.6966, "C1": 0.8554, "C2": 0.7122},
+    "fresh_test": {
+        "n_images": 200,
+        "n_references": 399,
+        "selected_ap": 0.8573,
+        "baseline_ap": 0.1363,
+        "ap_difference": 0.7211,
+        "ci95": [0.6983, 0.7435],
+        "verdict": "improved",
+    },
+}
 
 TEST_LOOK_PREREGISTERED = "pre-registered evaluation (this runtime)"
 TEST_LOOK_REPRODUCTION = "reproduction"
@@ -295,6 +317,88 @@ def scoring_mode(
     return "preregistered" if fresh_digest_ok else "exploratory"
 
 
+def compare_with_record(
+    recorded: Mapping[str, Any] | None, fresh: Mapping[str, Any] | None, selection: Mapping[str, Any]
+) -> dict[str, Any] | None:
+    """Does this pre-registered scoring match the evaluation of record? Compared at the record's printed precision.
+
+    None when there is no record or nothing was scored. Display only: it changes no setting and no label."""
+    if recorded is None or fresh is None:
+        return None
+    boot = fresh.get("bootstrap") or {}
+    this_run = {
+        "selected_config": selection.get("selected_config"),
+        "selected_system": selection.get("selected_system"),
+        "selected_ap": round(float(fresh["selected"]["ap"]), 4),
+        "baseline_ap": round(float(fresh["baseline"]["ap"]), 4),
+        "ap_difference": round(float(boot["primary_ap_difference"]), 4) if boot else None,
+        "ci95": [round(float(v), 4) for v in boot["primary_ap_ci95"]] if boot else None,
+        "verdict": fresh.get("verdict"),
+    }
+    record = {
+        "selected_config": recorded["selected_config"],
+        "selected_system": recorded["selected_system"],
+        **{k: recorded["fresh_test"][k] for k in ("selected_ap", "baseline_ap", "ap_difference", "ci95", "verdict")},
+    }
+    differing = [k for k in record if record[k] != this_run[k]]
+    return {
+        "record": {"date": recorded["date"], "commit": recorded["commit"], "notebook_blob": recorded["notebook_blob"]},
+        "matches": not differing,
+        "differing": differing,
+        "fields": {k: {"record": record[k], "this_run": this_run[k]} for k in record},
+    }
+
+
+def matches_to_json(matches: Mapping[str, Any]) -> dict[str, Any]:
+    """A `match_detections` table as plain JSON (rows in their original order), so the bootstrap can be re-run."""
+    return {
+        "thresholds": [float(t) for t in matches["thresholds"]],
+        "class_names": list(matches["class_names"]),
+        "n_images": int(matches["n_images"]),
+        "references": {k: [int(x) for x in v] for k, v in matches["references"].items()},
+        "rows": [
+            {"threshold": float(t), "class": c, "scores": [float(x) for x in s], "hits": [bool(x) for x in h], "image_index": [int(x) for x in o]}
+            for (t, c), (s, h, o) in matches["rows"].items()
+        ],
+    }
+
+
+def matches_from_json(data: Mapping[str, Any]) -> dict[str, Any]:
+    """The inverse of `matches_to_json`: a table `paired_bootstrap` accepts."""
+    return {
+        "thresholds": [float(t) for t in data["thresholds"]],
+        "class_names": list(data["class_names"]),
+        "n_images": int(data["n_images"]),
+        "references": {k: list(v) for k, v in data["references"].items()},
+        "rows": {
+            (float(r["threshold"]), r["class"]): (list(r["scores"]), list(r["hits"]), list(r["image_index"])) for r in data["rows"]
+        },
+    }
+
+
+def per_image_summary(selected: Mapping[str, Any], baseline: Mapping[str, Any], *, iou: float = 0.5) -> list[dict[str, Any]]:
+    """Per fresh-test image: reference boxes, and each system's detections and true positives at IoU `iou`.
+
+    Display only; the bootstrap itself is re-run from the saved match tables (`matches_to_json`)."""
+    counts = {name: [[0, 0] for _ in range(selected["n_images"])] for name in ("selected", "baseline")}
+    for name, table in (("selected", selected), ("baseline", baseline)):
+        for (threshold, _cls), (_scores, hits, owners) in table["rows"].items():
+            if abs(threshold - iou) > 1e-9:
+                continue
+            for hit, owner in zip(hits, owners, strict=True):
+                counts[name][owner][0] += 1
+                counts[name][owner][1] += int(bool(hit))
+    key = f"true_positives_iou{iou:g}"
+    return [
+        {
+            "image": i,
+            "references": sum(v[i] for v in selected["references"].values()),
+            **{name: {"detections": counts[name][i][0], key: counts[name][i][1]} for name in counts},
+        }
+        for i in range(selected["n_images"])
+    ]
+
+
 def atomic_write_text(path: str | Path, text: str) -> Path:
     """Write via a temporary file and os.replace: a reader never sees a half-written file."""
     path = Path(path)
@@ -362,11 +466,17 @@ class LookLedger:
         ]
         return max(found, default=0)
 
-    def plan(self, mode: str) -> tuple[str, str]:
-        """(test_look, file suffix) for a scoring of kind `mode`. Records nothing."""
+    def plan(self, mode: str, recorded: Mapping[str, Any] | None = None) -> tuple[str, str]:
+        """(test_look, file suffix) for a scoring of kind `mode`. Records nothing.
+
+        `recorded` is `RECORDED_EVALUATION`: once an evaluation of record exists, a pre-registered scoring is always a
+        reproduction, including the first one in a new runtime, and never writes the main report."""
         if mode not in ("preregistered", "exploratory", "masked"):
             raise ValueError(f"unknown scoring mode {mode!r}")
         counts = self._load()
+        if mode == "preregistered" and recorded is not None:
+            n = max(self._highest("reproduction"), counts.get("reproductions", 0)) + 1
+            return TEST_LOOK_REPRODUCTION, f"_reproduction_{n}"
         if mode == "preregistered":
             # Amendment 1 (A3): reports are written atomically, so a main report FILE that exists (even unreadable)
             # was completed once; it, any reproduction report, or the ledger proves the slot is spent.

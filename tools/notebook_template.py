@@ -148,9 +148,11 @@ TEMPLATE = {
             "the evidence is produced and how to read it. **[Engineering]** — reproducibility, provenance and packaging.\n\n"
             "**Predict, then check.** Before each principal result a **Predict before running** prompt asks you to commit to an expectation; after "
             "it, **What to notice** describes normal output and a collapsed **Check your reasoning** block gives a worked answer. Write your own "
-            "answer first, then open it. Each number an answer quotes names its run: most come from the Colab T4 run of 10 October 2026 (commit "
-            "`2c3d8bc`, notebook blob `fe56cb69`), which ran configuration C0 before the grid and the fresh test existed. This revision has "
-            "no hosted run yet; `docs/release-verification.md` will name the run that is the evaluation of record."
+            "answer first, then open it. Each number an answer quotes names its run. Most come from the hosted T4 evaluation of record: the "
+            "Colab CLI run of 18 October 2026 (commit `ad795d2`, notebook blob `5fe2ef5d`), in which the grid selected configuration C1. A few "
+            "earlier figures name the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`), which ran configuration C0 "
+            "before the grid and the fresh test existed. A later run with the same settings is a reproduction; `docs/release-verification.md` "
+            "lists the record and its reproductions."
         ),
         (
             "## The task: Input → Model/System → Output\n\n"
@@ -207,7 +209,7 @@ TEMPLATE = {
         ),
     ],
     "prerequisites": [
-        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). **For the full lesson choose a T4 GPU** (*Runtime → Change runtime type → T4 GPU*): only a T4 run scores the fresh test. A CPU runtime works, but its run is exploratory — this profile is float32 on both CPU and GPU, and CUDA is used automatically when present. For scale: on the repository's Windows CPU venv (Intel Core Ultra 9 275HX) loading takes 2.6 s, one `detect` 0.11 s, and the whole six-epoch fine-tune 25.9 s. A hosted CPU runtime is slower; budget a few minutes for the adaptation cell. On CPU the grid is off by default, so a CPU run trains only C0 and is exploratory (it never scores the fresh test). On a GPU the grid of three configs runs by default, and only a T4 run is the pre-registered evaluation; on a T4 that is about half a minute of fine-tuning (a planning estimate). The Colab T4 run of 10 October 2026 (blob `fe56cb69`, C0 only, before the grid existed) took 103.3 s end to end; this revision has no timed run yet. The kernel's own Python version does not matter: Section 1 builds a separate **Linux x86_64** environment with CPython 3.12.12 from the hash-locked pins, and every later cell runs there. The Linux build of `torch==2.14.0` with its CUDA libraries (several GB) and the 72 MB checkpoint are the large downloads.",
+        "- **Runtime:** a fresh supported runtime (Google Colab or Jupyter, Python 3.12). **For the full lesson choose a T4 GPU** (*Runtime → Change runtime type → T4 GPU*): only a T4 run scores the fresh test. A CPU runtime works, but its run is exploratory — this profile is float32 on both CPU and GPU, and CUDA is used automatically when present. For scale: on the repository's Windows CPU venv (Intel Core Ultra 9 275HX) loading takes 2.6 s, one `detect` 0.11 s, and the whole six-epoch fine-tune 25.9 s. A hosted CPU runtime is slower; budget a few minutes for the adaptation cell. On CPU the grid is off by default, so a CPU run trains only C0 and is exploratory (it never scores the fresh test). On a GPU the grid of three configs runs by default, and only a T4 run is the pre-registered evaluation. In the evaluation of record (Colab CLI T4, 18 October 2026, commit `ad795d2`) the three fine-tunes took 6.4 s (C0), 7.4 s (C1) and 6.0 s (C2), and the whole run took 134.6 s wall, including the 46 s environment build. The Colab T4 run of 10 October 2026 (blob `fe56cb69`, C0 only, before the grid existed) took 103.3 s end to end. The kernel's own Python version does not matter: Section 1 builds a separate **Linux x86_64** environment with CPython 3.12.12 from the hash-locked pins, and every later cell runs there. The Linux build of `torch==2.14.0` with its CUDA libraries (several GB) and the 72 MB checkpoint are the large downloads.",
         "- **Knowledge:** basic Python and PIL; what a bounding box in xyxy pixel coordinates is; what intersection-over-union measures; roughly what average precision summarises. You do **not** need to know YOLOX internals — SimOTA assignment and the loss are upstream's code, carried and called, not reimplemented here.",
         "- **Data:** everything is drawn in code by the carried `samples` module, so nothing is downloaded and no private data is needed: one 640×640 COCO demonstration scene with reference boxes, a deterministic 40-image labelled sign dataset for the adaptation, a 40-image validation pool and a 200-image fresh test, each from its own seed and pinned by SHA-256. **Pretraining overlap (DAT9):** every evaluation image is rendered at run time by `samples.py`, so none can be in COCO train2017, the data `yolox_s.pth` was trained on; the COCO scene's classes are COCO classes, so Section 4 tests category transfer to renderings, not memorised images. The pools are disjoint from each other as images and box layouts, but they come from one renderer, so the fresh test measures in-distribution generalisation on drawn signs. Optional BYOD is gated off by default. Expected BYOD input: for detection, one image decodable by Pillow, sides 16–4096 px; for adaptation, a directory (`BYOD_DATASET_DIR`, or the files chosen in the upload dialog) holding `annotations.json` — a list of `{'file': 'name.png', 'boxes': [[x0, y0, x1, y1], ...], 'labels': [name, ...]}` objects, boxes in that image's own pixels — and the image files it names, at least 8 records. Do not upload confidential or restricted data to a hosted notebook environment unless you are authorized to do so; uploaded inputs stay in this runtime and are not sent to any inference API.",
     ],
@@ -321,7 +323,7 @@ TEMPLATE = {
             "md": (
                 "**What to notice (Section 5):** the BGR and RGB lines side by side, and the two degenerate counts.\n"
                 "\n"
-                "<details><summary>Check your reasoning</summary>Fewer and weaker. In the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0) (and on the reference CPU before it) RGB input returned 5 detections instead of 6: the stop sign fell from 0.962 to 0.839, the bench disappeared, and a spurious second clock rose from 0.309 to 0.441. Nothing crashes and the output still looks plausible, which is exactly why the channel order is easy to get silently wrong. The blank and noise images give no boxes at the demo thresholds; any box there would be a false positive by construction.</details>\n"
+                "<details><summary>Check your reasoning</summary>Fewer and weaker. In the hosted T4 evaluation of record (18 October 2026, commit `ad795d2`, notebook blob `5fe2ef5d`), as in the Colab T4 run of 10 October 2026 and on the reference CPU before it, RGB input returned 5 detections instead of 6: the stop sign fell from 0.962 to 0.839, the bench disappeared, and a spurious second clock rose from 0.309 to 0.441. Nothing crashes and the output still looks plausible, which is exactly why the channel order is easy to get silently wrong. The blank and noise images give no boxes at the demo thresholds; any box there would be a false positive by construction.</details>\n"
                 "\n"
                 "## 6. Sample data for adaptation, a validation pool, and the validation stage · [Evaluation practice]\n"
                 "\n"
@@ -406,7 +408,7 @@ TEMPLATE = {
             "md": (
                 "**What to notice (Section 7):** the split sizes, the six re-initialised `head.cls_preds` tensors, and the two baseline scores.\n"
                 "\n"
-                "<details><summary>Check your reasoning</summary>On the exposed development test every recorded run, including the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0), measured AP 0.2083 and AP50 0.2222, with per-class AP50 stop 0.0, yield 0.0 and speed-limit 0.667. The box and objectness heads already find sign-shaped things; the random class head happens to rank the speed-limit boxes well. A non-zero baseline is the floor the fine-tune must beat, not something it achieved. The validation baseline has no recorded hosted number yet.</details>\n"
+                "<details><summary>Check your reasoning</summary>On the exposed development test every recorded run, including the hosted T4 evaluation of record (18 October 2026, commit `ad795d2`, notebook blob `5fe2ef5d`), measured AP 0.2083 and AP50 0.2222, with per-class AP50 stop 0.0, yield 0.0 and speed-limit 0.667. The box and objectness heads already find sign-shaped things; the random class head happens to rank the speed-limit boxes well. A non-zero baseline is the floor the fine-tune must beat, not something it achieved. On validation (40 images, 79 boxes) the same run measured the baseline at AP 0.1767 and AP50 0.1851 (per-class AP50 stop 0.0554, yield 0.0, speed-limit 0.5); that is the number the keep-baseline rule compares against.</details>\n"
                 "\n"
                 "## 8. The bounded SimOTA fine-tune, and a pre-registered validation grid · [Concept]\n"
                 "\n"
@@ -422,7 +424,7 @@ TEMPLATE = {
                 "| C1 | 10 | 1e-3 |\n"
                 "| C2 | 8 | 2e-3 |\n"
                 "\n"
-                "A challenger replaces C0 only if its validation AP@[.50:.95] is at least 0.03 higher and its AP50 at most 0.02 lower; if both qualify the larger gain wins, and ties go to the smaller config. Then the **keep-baseline rule**: the adapted model replaces the pretrained baseline only if it beats the baseline's validation AP by at least 0.03. With a GPU the grid runs by default (`RUN_GRID = \"auto\"`, about half a minute on a T4). On a CPU it is off by default: the cell trains only the recorded selection (C0). **Only a T4 run can be the pre-registered evaluation** (amendment 1, `docs/yolox-preregistration-amendment-1.md`): on a CPU, or on any other GPU, the run is **exploratory** whatever `RUN_GRID` says, and Section 9 shows validation and the exposed development test but never scores the fresh test.\n"
+                "A challenger replaces C0 only if its validation AP@[.50:.95] is at least 0.03 higher and its AP50 at most 0.02 lower; if both qualify the larger gain wins, and ties go to the smaller config. Then the **keep-baseline rule**: the adapted model replaces the pretrained baseline only if it beats the baseline's validation AP by at least 0.03. With a GPU the grid runs by default (`RUN_GRID = \"auto\"`; in the T4 evaluation of record the three fine-tunes took 19.8 s together). On a CPU it is off by default: the cell trains only the recorded selection (C0). **Only a T4 run can be the pre-registered evaluation** (amendment 1, `docs/yolox-preregistration-amendment-1.md`): on a CPU, or on any other GPU, the run is **exploratory** whatever `RUN_GRID` says, and Section 9 shows validation and the exposed development test but never scores the fresh test.\n"
                 "\n"
                 "**What decides in practice.** In every recorded look all three configs reach validation AP50 1.0, so the AP50 guard decides nothing here and only AP@[.50:.95] decides. The 0.03 margin is a practical tolerance at the T4 noise floor (two T4 runs of C0 differed by 0.064 AP on ten images), not a significance test. CUDA is not deterministic, so a repeat hosted run may select differently; that cannot bias the fresh-test result, because the fresh test plays no part in the choice.\n"
                 "\n"
@@ -524,7 +526,7 @@ TEMPLATE = {
             "md": (
                 "**What to notice (Section 8):** one line per epoch per config, `l1` at 0.0, `num_fg` steady, each config's validation AP, and the selection with its reason.\n"
                 "\n"
-                "<details><summary>Check your reasoning</summary>In the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0), C0's `total_loss` fell from 6.288 to 1.595 over six epochs and `num_fg` stayed between 7.9 and 8.9: SimOTA kept finding about eight positives per image. Only 1.9 M of 8.9 M parameters trained. No hosted run of the grid is recorded yet, so whether C1 or C2 beats C0 by the margin is the open question the first hosted run answers. A falling loss shows the head fits the 30 training images; whether that transfers is Section 9's question.</details>\n"
+                "<details><summary>Check your reasoning</summary>In the hosted T4 evaluation of record (18 October 2026, commit `ad795d2`, notebook blob `5fe2ef5d`), the selected C1's `total_loss` fell from 6.288 to 1.384 over ten epochs (C0: 6.288 to 1.876 over six) and `num_fg` stayed between 7.9 and 8.9: SimOTA kept finding about eight positives per image. Only 1.9 M of 8.9 M parameters trained. Validation AP@[.50:.95] was 0.6966 for C0, 0.8554 for C1 and 0.7122 for C2, with AP50 1.0 for all three. C1 beat C0 by 0.1587, above the 0.03 margin; C2 beat it by only 0.0155. Only C1 qualified, so C1 was selected, and it beat the baseline's 0.1767 by 0.6786, so the adapted C1 is the selected system. C0 and C1 share a seed and their first epoch is identical, but on the T4 their losses split at epoch 2 (3.7556 against 3.7558): CUDA kernels are not deterministic, so a reproduction can differ in later decimals and, near the margin, in the choice. C2's loss rose in its last two epochs (1.872, 2.089, 2.602). A falling loss shows the head fits the 30 training images; whether that transfers is Section 9's question.</details>\n"
                 "\n"
                 "## 9. Evaluate: validation, the exposed development test, and the fresh test · [Evaluation practice]\n"
                 "\n"
@@ -532,7 +534,7 @@ TEMPLATE = {
                 "\n"
                 "`ap50` is average precision at IoU 0.50; `ap` is COCO's primary metric, AP@[.50:.95], the mean over ten IoU thresholds from 0.50 to 0.95 — it is always lower, because it demands progressively tighter boxes. Evaluation uses the *evaluation* thresholds (`0.01 / 0.65`) rather than the demo pair, since average precision rewards recall, and caps detections at 100 per image as COCO does. Tied scores are one operating point, so a result never depends on the order of the images.\n"
                 "\n"
-                "**Before the fresh test is touched,** the cell re-checks four things: every pre-registered setting (`preregistered_differences`, over all of them, including that the device is a T4), that the grid of *this* Section 8 run is complete and ran with those settings (recomputed here, never taken from memory), that the models in hand are the selected system and the baseline (by state fingerprint), and that the 200 generated images match their committed digest. If all hold, it scores the fresh test and labels the result `pre-registered evaluation (this runtime)`; a second scoring in the same runtime is labelled `reproduction` and written to a `_reproduction_<n>` file. Anything else is `not scored (exploratory)`, written to `_exploratory_<n>` files, and the cell says why. `docs/release-verification.md` records which hosted run is the evaluation of record.\n"
+                "**Before the fresh test is touched,** the cell re-checks four things: every pre-registered setting (`preregistered_differences`, over all of them, including that the device is a T4), that the grid of *this* Section 8 run is complete and ran with those settings (recomputed here, never taken from memory), that the models in hand are the selected system and the baseline (by state fingerprint), and that the 200 generated images match their committed digest. If all hold, it scores the fresh test. The evaluation of record already exists (the hosted T4 run of 18 October 2026, carried as `RECORDED_EVALUATION`), so every such scoring, your first included, is labelled `reproduction`, is written to `_reproduction_<n>` files that never overwrite the main ones, and prints whether it matches the record. The per-image results (each image's boxes and what each system found, plus the match tables the bootstrap resamples) are saved beside the report, so a reproduction's interval can be re-checked without re-running the model. Anything else is `not scored (exploratory)`, written to `_exploratory_<n>` files, and the cell says why. `docs/release-verification.md` records which hosted run is the evaluation of record.\n"
                 "\n"
                 "**Reading rule.** The primary endpoint is fresh-test AP@[.50:.95], selected system minus baseline, with a paired 95 % bootstrap interval over images (10 000 resamples, fixed seed). The verdict is *improved* only if the interval's lower bound is above 0 and the gain is at least 0.03; *worse* if its upper bound is below 0; otherwise *no detectable difference*. AP50 is secondary because it saturates. The baseline's classification layers are untrained, so an *improved* verdict is expected; the informative parts are the size of the gain, the width of the interval, and that it held on images no choice was made on.\n"
                 "\n"
@@ -590,7 +592,7 @@ TEMPLATE = {
                 "           + (['the fresh pool failed its digest check'] if fresh_digest_ok is False else [])\n"
                 "           + (['DIMER_MASK_FRESH_TEST=1 (a development check)'] if masked else []))\n"
                 "ledger = LookLedger(OUTPUTS / 'work' / 'look_ledger.json', OUTPUTS, '{stem}')\n"
-                "test_look, suffix = ledger.plan(mode)\n"
+                "test_look, suffix = ledger.plan(mode, RECORDED_EVALUATION)\n"
                 "evaluation_report = {{\n"
                 "    'test_look': test_look, 'scoring_mode': mode, 'preregistered': mode == 'preregistered',\n"
                 "    'preregistered_settings_hold': not differences, 'settings_differing': differences, 'reasons': reasons,\n"
@@ -612,6 +614,16 @@ TEMPLATE = {
                 "        'verdict': reading_verdict(boot, same_model=same_model),\n"
                 "        'tied_score_groups': {{'selected': selected_fresh['tied_score_groups'], 'baseline': baseline_fresh['tied_score_groups']}},\n"
                 "    }}\n"
+                "    # Display only: the per-image results and the match tables, so a reproduction's bootstrap can be re-checked.\n"
+                "    per_image_rows = per_image_summary(selected_fresh['matches'], baseline_fresh['matches'])\n"
+                "    per_image_path = OUTPUTS / f'{stem}_fresh_test_per_image{{suffix}}.json'\n"
+                "    atomic_write_json(per_image_path, {{\n"
+                "        'test_look': test_look, 'bootstrap': None if boot is None else {{k: boot[k] for k in ('n_boot', 'seed', 'resampling_unit')}},\n"
+                "        'per_image': per_image_rows,\n"
+                "        'matches': {{'selected': matches_to_json(selected_fresh['matches']), 'baseline': matches_to_json(baseline_fresh['matches'])}},\n"
+                "    }})\n"
+                "    evaluation_report['fresh_test']['per_image_file'] = str(per_image_path)\n"
+                "    evaluation_report['record_comparison'] = compare_with_record(RECORDED_EVALUATION, evaluation_report['fresh_test'], selection)\n"
                 "report_path = OUTPUTS / f'{stem}_evaluation_report{{suffix}}.json'\n"
                 "atomic_write_json(report_path, evaluation_report)\n"
                 "ledger.record(mode, suffix)  # a look counts only once its report is on disk\n"
@@ -622,6 +634,16 @@ TEMPLATE = {
                 "                      'ap_difference': None if fresh['bootstrap'] is None else round(fresh['bootstrap']['primary_ap_difference'], 4),\n"
                 "                      'ci95': None if fresh['bootstrap'] is None else [round(v, 4) for v in fresh['bootstrap']['primary_ap_ci95']]}},\n"
                 "                     indent=2))\n"
+                "    complete = {{name: sum(r[name]['true_positives_iou0.5'] == r['references'] for r in per_image_rows) for name in ('selected', 'baseline')}}\n"
+                "    print(f\"per-image results for {{len(per_image_rows)}} images written to {{per_image_path}}; every box found at IoU 0.5 on \"\n"
+                "          f\"{{complete['selected']}} images (selected) and {{complete['baseline']}} (baseline)\")\n"
+                "    comparison = evaluation_report.get('record_comparison')\n"
+                "    if comparison is not None:\n"
+                "        print('reproduction of the pre-registered evaluation of', comparison['record']['date'],\n"
+                "              f\"(commit {{comparison['record']['commit'][:7]}}):\",\n"
+                "              'matches the record' if comparison['matches'] else f\"differs from the record in {{comparison['differing']}}\")\n"
+                "        if not comparison['matches']:\n"
+                "            print(json.dumps({{k: comparison['fields'][k] for k in comparison['differing']}}))\n"
                 "else:\n"
                 "    print('fresh test not scored:', '; '.join(reasons) or test_look)\n"
                 "\n"
@@ -638,7 +660,7 @@ TEMPLATE = {
             "md": (
                 "**What to notice (Section 9):** the validation scores, the exposed-development-test table, and the fresh-test result or the reason it was not scored.\n"
                 "\n"
-                "<details><summary>Check your reasoning</summary>On the exposed development test, C0 reached AP50 1.0 in every recorded run and AP@[.50:.95] 0.7766 in the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0); earlier revisions recorded 0.8110 (reference CPU) and 0.8403 (Kaggle T4), both on 15 September 2026 with an earlier notebook revision. The AP50 is saturated: ten images from the training generator are too easy to separate a good adapter from a perfect one. The AP@[.50:.95] spread between the two T4 records (0.064 on the same ten images) is run-to-run and revision-to-revision variation, not a device effect, and it is why the grid margin is 0.03 and the fresh test has 200 images. There is no recorded fresh-test number yet.</details>\n"
+                "<details><summary>Check your reasoning</summary>In the hosted T4 evaluation of record (18 October 2026, commit `ad795d2`, notebook blob `5fe2ef5d`), the selected C1 scored AP 0.8516 and AP50 1.0 on the exposed development test (baseline 0.2083 and 0.2222). For C0, AP50 was 1.0 in every recorded run and AP@[.50:.95] 0.7766 in the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0); earlier revisions recorded 0.8110 (reference CPU) and 0.8403 (Kaggle T4), both on 15 September 2026 with an earlier notebook revision. The AP50 is saturated: ten images from the training generator are too easy to separate a good adapter from a perfect one. The AP@[.50:.95] spread between the two T4 records (0.064 on the same ten images) is run-to-run and revision-to-revision variation, not a device effect, and it is why the grid margin is 0.03 and the fresh test has 200 images. On the fresh test (200 images, 399 boxes) the evaluation of record measured the selected C1 at AP 0.8573 (AP50 1.0) against the baseline's 0.1363 (AP50 0.1449): a gain of +0.7211 with a paired bootstrap 95 % interval of [0.6983, 0.7435], so the verdict is *improved*, and the interval's half-width is 0.0226. A large gain was expected because the baseline's classification layers are untrained. Your own run with the same settings is a reproduction, and Section 9 prints whether it matches the record.</details>\n"
                 "\n"
                 "## 10. Inference on new data · [Concept]\n"
                 "\n"
@@ -678,7 +700,7 @@ TEMPLATE = {
             "md": (
                 "**What to notice (Section 10):** one row per image with the truth, the detections and the same-label IoU.\n"
                 "\n"
-                "<details><summary>Check your reasoning</summary>All five, with the right labels and IoU 0.82–0.93, and no spurious boxes, in the Colab T4 run of 10 October 2026 (commit `2c3d8bc`, notebook blob `fe56cb69`, configuration C0). That is encouraging for drawn signs from an unseen seed, but they come from the same generator: same shapes, same colours, same rendering. It is not evidence about photographs.</details>\n"
+                "<details><summary>Check your reasoning</summary>All five, with the right labels, same-label IoU 0.881–0.942 and no spurious boxes, in the hosted T4 evaluation of record (18 October 2026, commit `ad795d2`, notebook blob `5fe2ef5d`, selected configuration C1). The Colab T4 run of 10 October 2026 (configuration C0) also found all five, at IoU 0.82–0.93. That is encouraging for drawn signs from an unseen seed, but they come from the same generator: same shapes, same colours, same rendering. It is not evidence about photographs.</details>\n"
                 "\n"
                 "## 11. Export the artifact, then reload it as if from a cold start · [Engineering]\n"
                 "\n"

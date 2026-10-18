@@ -81,3 +81,18 @@ variable.
 Everything else in `docs/yolox-preregistration.md` stands: pools and digests, the grid, the margins, the
 keep-baseline rule, the reading rule (paired image bootstrap, n_boot 10 000, seed 20261018, the verdicts)
 and the score-once rules.
+
+## Note after the evaluation of record (2026-10-18; dated, the text above is unchanged)
+
+The erratum above (|CPU − T4| ≤ 0.034) holds only for C0 on the exposed development test, across the
+earlier records. It does not hold on validation. The hosted T4 evaluation of record (commit `ad795d2`)
+differs from the CPU masked check by up to 0.116 AP@[.50:.95]:
+
+| Config | T4 record | CPU masked check | T4 − CPU |
+|---|---|---|---|
+| C0 | 0.6966 | 0.7760 | −0.079 |
+| C1 | 0.8554 | 0.8871 | −0.032 |
+| C2 | 0.7122 | 0.8285 | −0.116 |
+
+The CPU check ran older code (`825771a`) than the T4 run (`b242f44`), so these gaps mix device and code
+effects. Both runs selected C1. The rule is unchanged: only a T4 run decides.

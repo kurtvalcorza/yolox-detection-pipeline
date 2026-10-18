@@ -286,6 +286,13 @@ true, `settings_differing` empty, grid complete. These numbers were not used to 
 a later identical hosted run labels itself "pre-registered evaluation (this runtime)", not "reproduction";
 this file is what says it is a reproduction.
 
+**Note (2026-10-18, requote):** `RECORDED_EVALUATION` in `protocol.py` now carries this record (date,
+commit `ad795d2`, blob `5fe2ef5d`, selected C1, the fresh-test numbers and the validation grid), and the
+notebook was regenerated from it. From that revision on, every pre-registered scoring, including the first
+one in a new runtime, is labelled "reproduction", writes `_reproduction_<n>` files (never the main
+report or results files) and prints whether it matches the record. The paragraph above describes the
+revision the record ran.
+
 **Redaction (review R116-m3, own commit).** In `execution-evidence/2026-10-10-2c3d8bc/exec.log`, lines
 1 and 191 had the operator's home-directory run path replaced with `<local-run-dir>/`.
 - Captured SHA-256: `e4a5c5f290d2b2b454a2d22ba0c4b3dc834c4219089f7bf27fdfd3fe46f4c79e`. This is the
@@ -306,6 +313,11 @@ number above matches the earlier records where the two overlap.
   - Sections 10-11 use the selected system.
 - Erratum: |CPU - T4| <= 0.034 and T4 - T4 = 0.064 AP@[.50:.95] for C0 on the exposed development test.
   The "about 0.1 AP" in the pre-registration is wrong. The rule is unchanged.
+  - **Correction (2026-10-18, after the T4 record):** this erratum is too strong. It holds only for C0 on
+    the exposed development test, across the earlier records. On validation, the T4 record differs from
+    the CPU masked check by up to 0.116 AP@[.50:.95]: C0 0.6966 vs 0.7760 (0.079), C1 0.8554 vs 0.8871
+    (0.032), C2 0.7122 vs 0.8285 (0.116). The CPU check also ran older code (`825771a`; the T4 run used
+    `b242f44`), so these gaps mix device and code effects. The rule is unchanged.
 - No fresh-test score exists: the CPU development look was masked, and there are 0 hosted looks.
   `RECORDED_EVALUATION` is still `None`. (State at round 2; superseded by the 2026-10-18 evaluation of record below.)
 
@@ -373,6 +385,10 @@ number differs.
   0.7104.
 - Only 2 of 24 epoch loss lines are identical (C0 and C1 epoch 1). C2 epoch 1 differs in the 4th
   decimal.
+- CUDA non-determinism (note added 2026-10-18): on the T4, C0 and C1 share a seed and print the same
+  epoch-1 line, but split at epoch 2 (total loss 3.7556 for C0, 3.7558 for C1). On CPU their epochs
+  1–6 are identical. CUDA determinism is not enforced, so a hosted reproduction can differ in later
+  decimals and, near the 0.03 margin, in the selected config.
 - The exposed development test for C1 is 0.8516 on the T4 against 0.9050 on CPU (AP50 1.0 both).
 - Fine-tuning took 19.8 s on the T4 against 194.4 s on CPU.
 - The CPU check ran an earlier code revision (`825771a`) than this run (`b242f44`, round-2 code
@@ -396,6 +412,10 @@ number differs.
 - Observed CI half-width: 0.0226. This replaces the pre-registration's planning estimate of ±0.07 AP.
   The minimum detectable change (planned about 0.10) is far below the observed gain.
 - The bootstrap was not re-run, because the per-image detections stayed on the VM.
+  - **Note (2026-10-18, requote):** Section 9 now also writes
+    `outputs/yolox_detection_fresh_test_per_image<suffix>.json`. It holds per-image box counts and true
+    positives at IoU 0.5 for both systems, plus the match tables the bootstrap resamples, so a later
+    reproduction's interval can be re-run from the file. This is display only and changes no score.
 - The fresh test measures in-distribution generalisation (same renderer, same shapes). It is not a
   detection benchmark.
 

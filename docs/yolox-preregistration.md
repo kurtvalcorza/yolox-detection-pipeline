@@ -127,3 +127,20 @@ spread between the two hosted T4 records of C0 on the exposed development test.
   hosted runs are reproductions. `RECORDED_EVALUATION` stays `None` until that run exists.
 - CPU checks by the fixer run with the fresh test masked. Nothing seen on validation, the exposed
   development test or a CPU run changes any setting in this document.
+
+## Notes after the evaluation of record (dated; the text above is unchanged)
+
+**2026-10-18.** The hosted T4 evaluation of record (Colab CLI, commit `ad795d2`, notebook blob
+`5fe2ef5d`; see `docs/release-verification.md`) corrects two planning estimates above.
+- Fine-tuning time: "about 24 s of fine-tuning on a T4" was a planning estimate. Measured: 19.8 s for the
+  three configs (C0 6.4 s, C1 7.4 s, C2 6.0 s). The whole run took 134.6 s wall, including the 46 s
+  environment build.
+- CI width: the planning estimate was about ±0.07 AP. The observed 95 % interval was [0.6983, 0.7435]
+  around a difference of +0.7211, a half-width of 0.0226.
+- CUDA non-determinism: C0 and C1 share a seed, and on the T4 their first epoch is identical, but their
+  losses split at epoch 2 (3.7556 vs 3.7558). On CPU their first six epochs are identical. A hosted
+  reproduction can therefore differ in later decimals and, near the margin, in the selection.
+- `RECORDED_EVALUATION` now carries this record, so every later identical run, including the first one in
+  a new runtime, is labelled "reproduction".
+
+None of these notes changes a setting, a margin or the reading rule.
