@@ -439,3 +439,35 @@ end to end: the VM run directory, the local copy, and the committed blob.
   - Captured SHA-256: `c8aacc7a67672603f5741704f6cdae30b1e572c065855ccc6a482df05844a876`.
   - Committed SHA-256: `345229e6fb37ca992e082f7270e5b251a90737ad1bc780e22b34598faa2665b7`.
   - `run_summary.json` does not record the log's hash.
+
+## Hosted T4 reproduction 116b (2026-10-18, commit d6794c9)
+
+**REL13 label for every number in this section:**
+- Runtime: Colab CLI 0.7.4, fresh Colab Tesla T4 (session `suite-yolox-d6794c9-c7f4`), started 2026-10-18 09:22:48 UTC, 144.7 s wall.
+- Code: commit `d6794c9`, notebook blob `bf60acf7`. Settings were the same as the record's: the round-2 settings, amendment 1 and every field at its default.
+- Role: **reproduction**, the second hosted look at fresh test 1160. Section 9 printed `test_look` "reproduction" and wrote the `_reproduction_1` files.
+- Evidence: `docs/execution-evidence/2026-10-18-d6794c9/`. The executed notebook and `run_summary.json` were copied byte for byte. In `exec.log`, lines 1 and 191 had the local run directory replaced with `<local-run-dir>/`.
+  - Captured SHA-256 of `exec.log`: `c3d8ee212880f312a078b2b09b8149ff27967971d2f4862af4b8f225ba81edbe`.
+  - Committed SHA-256 of `exec.log`: `e0f886eaf76044c394fff3634524e1a1f53cc07e6f569d962816a3978862a6ec`.
+  - `run_summary.json`: `68ed39db…cd92b`. Executed notebook: `160e5879…610f`.
+
+**The selection was NOT reproduced:**
+
+| Config | Validation AP, record `ad795d2` | Validation AP, 116b `d6794c9` | Final `total_loss` record → 116b |
+|---|---|---|---|
+| C0 | 0.6966 | **0.8624** | 1.87603 → 1.75461 |
+| C1 | **0.8554** | 0.8818 | 1.38442 → 1.42115 |
+| C2 | 0.7122 | 0.7981 | 2.60175 → 1.59043 |
+
+- 116b selected **C0**: C1 beat it by only 0.0194, which is below the 0.03 margin. The record selected C1.
+- The cause is CUDA non-determinism. With the same seed, the loss curves are identical through epoch 2 and differ from epoch 3 on (C0 epoch 3: 2.8195 in the record, 2.8004 in 116b).
+
+**The fresh-test gain was reproduced within its interval.** Section 9 printed the comparison block against the record:
+- `selected_config` C1 → C0;
+- `selected_ap` 0.8573 → 0.8594;
+- `ap_difference` +0.7211 → **+0.7231**;
+- `ci95` [0.6983, 0.7435] → [0.6999, 0.7440].
+
+The verdict is "improved" in both runs. The baseline is identical in both: fresh AP 0.1363 / AP50 0.1449, validation 0.1767, exposed development test 0.2083 / 0.2222.
+
+**Consequence.** Kurt ruled on 2026-10-18 that GPU training will be made deterministic and that a third fresh pool and a new evaluation of record will be added. See amendment 2. The record `ad795d2` and this reproduction stay as history.
