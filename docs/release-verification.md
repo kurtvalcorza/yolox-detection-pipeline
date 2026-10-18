@@ -292,3 +292,16 @@ and later identical hosted runs are reproductions.
 **Tie rule (review R116-S1).** `average_precision` now scores tied scores as one operating point, so
 the result does not depend on image order. With distinct scores the numbers are unchanged; every CPU
 number above matches the earlier records where the two overlap.
+
+### Round 2 (PR #8 peer review, 2026-10-18)
+
+- `docs/yolox-preregistration-amendment-1.md` was committed alone, before the code. Its changes:
+  - only a T4 can score the fresh test (`device_class` is a checked setting);
+  - Section 9 recomputes the grid gate and never trusts state left by an interrupted Section 8;
+  - an existing main report file spends the pre-registered slot;
+  - grid rows are written per run (`outputs/grid/run_<k>/`);
+  - Sections 10-11 use the selected system.
+- Erratum: |CPU - T4| <= 0.034 and T4 - T4 = 0.064 AP@[.50:.95] for C0 on the exposed development test.
+  The "about 0.1 AP" in the pre-registration is wrong. The rule is unchanged.
+- No fresh-test score exists: the CPU development look was masked, and there are 0 hosted looks.
+  `RECORDED_EVALUATION` is still `None`.
