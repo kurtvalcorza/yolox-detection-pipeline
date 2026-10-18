@@ -111,7 +111,7 @@ def harness(notebook, tmp_path, monkeypatch):
             exec(source, ns)  # noqa: S102 - the notebook's own cells
         return ns
 
-    return run, ns, tmp_path
+    return run, ns, tmp_path / "outputs"
 
 
 def _report(tmp_path: Path, suffix: str = "") -> dict:
@@ -234,7 +234,7 @@ def test_an_interrupted_report_write_is_not_a_look(harness) -> None:
 @pytest.mark.parametrize("ledger_text", ["", "{not json", "[1, 2]", '{"preregistered_completed": "x"}'])
 def test_a_corrupt_or_empty_ledger_never_crashes_or_relabels(harness, ledger_text) -> None:
     run, ns, tmp = harness
-    (tmp / "work").mkdir()
+    (tmp / "work").mkdir(parents=True)
     (tmp / "work" / "look_ledger.json").write_text(ledger_text, encoding="utf-8")
     run()
     assert _report(tmp)["test_look"] == protocol.TEST_LOOK_PREREGISTERED
@@ -245,6 +245,7 @@ def test_a_corrupt_or_empty_ledger_never_crashes_or_relabels(harness, ledger_tex
 
 def test_an_empty_main_report_is_rewritten_only_when_the_ledger_shows_no_completed_look(harness) -> None:
     run, ns, tmp = harness
+    tmp.mkdir()
     (tmp / f"{STEM}_evaluation_report.json").write_text("", encoding="utf-8")
     run()
     assert _report(tmp)["test_look"] == protocol.TEST_LOOK_PREREGISTERED

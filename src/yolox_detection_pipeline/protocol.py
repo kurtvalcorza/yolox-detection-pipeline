@@ -12,7 +12,7 @@ Shared design for the YOLOX tutorials (rows 116 and 117): only `VALIDATION_POOL`
 digests differ between the two repositories.
 """
 
-# ruff: noqa: E501
+# ruff: noqa: E501, I001  -- I001: the two single-line package imports below must stay separate (standalone generator)
 from __future__ import annotations
 
 import hashlib
@@ -25,14 +25,9 @@ from typing import Any
 
 import numpy as np
 
-from .pipeline import (
-    COCO_IOU_THRESHOLDS,
-    EVAL_DETECTION_THRESHOLD,
-    EVAL_NMS_THRESHOLD,
-    MAX_EVAL_DETECTIONS,
-    ap_from_matches,
-    prepared_matches,
-)
+# One name list per line: the standalone generator strips single-line package imports.
+from .pipeline import COCO_IOU_THRESHOLDS, EVAL_DETECTION_THRESHOLD, EVAL_NMS_THRESHOLD, MAX_EVAL_DETECTIONS
+from .pipeline import ap_from_matches, prepared_matches
 
 # ---- pools (drawn by samples.sign_dataset; digests computed under the pinned Pillow 11.3.0) ------------------------
 VALIDATION_POOL = {"n": 40, "seed": 1161}

@@ -66,7 +66,7 @@ def test_par1_every_module_is_carried_in_dependency_order(notebook: dict, contex
     tagged = _tagged(notebook)
     names = [c["metadata"]["dimer"]["embedded_module"] for c in tagged]
     assert names == context["module_rels"], "carried modules differ from the generator's dependency order"
-    assert len(names) == len(TEMPLATE["modules"]) == 10
+    assert len(names) == len(TEMPLATE["modules"]) == 11
 
 
 def test_par1_each_carried_cell_equals_its_repository_module(notebook: dict, context: dict) -> None:
@@ -172,8 +172,8 @@ def test_e2e_default_path_actually_adapts(notebook: dict) -> None:
     """RUN7/FT2: an E2E notebook whose workflow includes adaptation must really run it in the
     default path, not behind a default-off flag."""
     code = "\n".join(_source(c) for c in _cells(notebook, "code"))
-    assert "run = adapter.finetune(" in code
-    finetune_line = next(line for line in code.splitlines() if "adapter.finetune(" in line)
+    assert "candidate_run = candidate.finetune(" in code
+    finetune_line = next(line for line in code.splitlines() if "candidate.finetune(" in line)
     assert not finetune_line.lstrip().startswith(("if ", "#")), finetune_line
     for gate in ("USE_BYOD_IMAGE = False", "USE_BYOD_DATASET = False"):
         assert gate in code, f"{gate} must be gated off by default"
@@ -182,12 +182,14 @@ def test_e2e_default_path_actually_adapts(notebook: dict) -> None:
 def test_e2e_baseline_precedes_adaptation(notebook: dict) -> None:
     """A before/after claim needs the before to be measured first, on the same held-out records."""
     code = "\n".join(_source(c) for c in _cells(notebook, "code"))
-    assert code.index("baseline = adapter.evaluate(held_out)") < code.index("run = adapter.finetune(")
-    assert code.index("run = adapter.finetune(") < code.index("adapted = adapter.evaluate(held_out)")
+    train_at = code.index("candidate_run = candidate.finetune(")
+    assert code.index("baseline_val = baseline_pipe.evaluate(validation_records)") < train_at
+    assert code.index("baseline = baseline_pipe.evaluate(exposed_dev_test)") < train_at
+    assert train_at < code.index("adapted = adapter.evaluate(exposed_dev_test)")
 
 
 def test_e2e_artifact_is_exported_and_reloaded(notebook: dict) -> None:
     code = "\n".join(_source(c) for c in _cells(notebook, "code"))
     assert "adapter.save_artifact(" in code
     assert "YoloxDetectionPipeline.load_artifact(" in code
-    assert "assert abs(reloaded_metrics['ap'] - adapted['ap']) < 1e-9" in code
+    assert "assert abs(reloaded_metrics['ap'] - adapter_val['ap']) < 1e-9" in code
