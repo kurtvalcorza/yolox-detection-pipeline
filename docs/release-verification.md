@@ -145,8 +145,8 @@ and only a fresh test is scored as the measurement. On AP@[.50:.95] the leader o
 at 2e-3, not the default; that row is C2 of the new grid.
 
 `DEFAULT_EPOCHS = 6`, `DEFAULT_LEARNING_RATE = 1e-3` and `freeze_backbone=True` were chosen by this
-grid, a configuration chosen on its evaluation split. Held-out AP50 after training, everything else fixed
-and seeded:
+grid, a configuration chosen on its evaluation split. The criterion was AP50 on the six held-out images
+after training, everything else fixed and seeded:
 
 | Epochs | Learning rate | Backbone | Train time | AP50 after | AP after |
 |---|---|---|---|---|---|
