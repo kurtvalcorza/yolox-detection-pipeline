@@ -574,7 +574,7 @@ TEMPLATE = {
                 "differences = preregistration_differences(settings_now)\n"
                 "# Amendment 1 (A2): recompute from this Section 8 run's rows; never trust a status or selection left in memory.\n"
                 "grid_status = grid_check(grid_rows, settings_now, data_digests)\n"
-                "selection_matches_grid = (set(grid_rows) == {{c['name'] for c in GRID}}\n"
+                "selection_matches_grid = (selection['selected_config'] in grid_rows  # all three configs: grid_check\n"
                 "                          and selection['fingerprint'] == grid_rows.get(selection['selected_config'], {{}}).get('fingerprint')\n"
                 "                          and adapter.state_fingerprint() == selection['fingerprint'])\n"
                 "expected_fingerprint = BASELINE_FINGERPRINT if selected_pipe is baseline_pipe else selection['fingerprint']\n"
