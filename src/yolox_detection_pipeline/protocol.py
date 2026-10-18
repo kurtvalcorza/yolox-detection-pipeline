@@ -46,7 +46,9 @@ GRID: tuple[dict[str, Any], ...] = (
     {"name": "C2", "epochs": 8, "learning_rate": 2e-3},
 )
 DEFAULT_CONFIG = "C0"
-RECORDED_SELECTION = "C0"  # what a grid-off (CPU) run trains; C0 until a hosted record selects otherwise
+# What a grid-off (CPU) run trains: the hosted record's selection (C1 in the 2026-10-18 T4 evaluation of record,
+# ad795d2; C0 before it). A grid-off run is exploratory either way.
+RECORDED_SELECTION = "C1"
 TIE_ORDER = ("C0", "C2", "C1")  # exact ties go to the smaller config (fewer epochs)
 TIE_TOLERANCE = 1e-9
 MIN_AP_GAIN = 0.03  # a challenger must beat C0's validation AP@[.50:.95] by this much

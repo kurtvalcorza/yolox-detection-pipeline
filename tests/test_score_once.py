@@ -195,7 +195,11 @@ def test_cpu_default_grid_off_trains_the_recorded_selection_and_is_exploratory(h
     run()
     report = _report(tmp, "_exploratory_1")
     assert report["fresh_test"] is None and "run_grid" in report["settings_differing"]
-    assert list(ns["grid_rows"]) == [protocol.RECORDED_SELECTION] == ["C0"]
+    assert report["test_look"] == protocol.TEST_LOOK_EXPLORATORY and report["preregistered"] is False
+    # The recorded selection follows the hosted record (ad795d2 selected C1): ten epochs at 1e-3.
+    assert list(ns["grid_rows"]) == [protocol.RECORDED_SELECTION] == ["C1"]
+    assert protocol.RECORDED_SELECTION == protocol.RECORDED_EVALUATION["selected_config"]
+    assert ns["grid_rows"]["C1"]["settings"]["epochs"] == 10 and ns["grid_rows"]["C1"]["settings"]["learning_rate"] == 1e-3
 
 
 def test_a_partial_grid_is_exploratory_and_not_a_look(harness) -> None:
