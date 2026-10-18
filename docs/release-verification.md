@@ -284,7 +284,7 @@ the first hosted T4 Run all with every setting at its default. That run is the e
 and later identical hosted runs are reproductions.
 
 **Redaction (review R116-m3, own commit).** In `execution-evidence/2026-10-10-2c3d8bc/exec.log`, lines
-1 and 191 had `/home/kurt/colab-runs/` replaced with `<local-run-dir>/`.
+1 and 191 had the operator's home-directory run path replaced with `<local-run-dir>/`.
 - Captured SHA-256: `e4a5c5f290d2b2b454a2d22ba0c4b3dc834c4219089f7bf27fdfd3fe46f4c79e`. This is the
   value `run_summary.json` still records.
 - Committed SHA-256: `e042f9783e063c5a8d68890c4be210076ebc6f86e0b9a8e28bf238c4447af351`.
