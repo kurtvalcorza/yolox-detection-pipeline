@@ -91,10 +91,13 @@ CODE_MARKERS = (
     "ledger.record(mode, suffix)",
     # New-data inference, artifact export, fresh reload.
     "new_records = sign_dataset(3, seed=NEW_DATA_SEED)",
-    "descriptor = adapter.save_artifact(artifact_path, notes='standalone tutorial run')",
+    "descriptor = selected_pipe.save_artifact(artifact_path, notes=",
     "reloaded = YoloxDetectionPipeline.load_artifact(artifact_path)",
     "reloaded_metrics = reloaded.evaluate(validation_records)",
-    "assert abs(reloaded_metrics['ap'] - adapter_val['ap']) < 1e-9",
+    "assert abs(reloaded_metrics['ap'] - selected_val['ap']) < 1e-9",
+    # Amendment 1: the device is checked, and Section 9 recomputes the grid check.
+    "DEVICE_CLASS = device_class(torch)",
+    "grid_status = grid_check(grid_rows, settings_now, data_digests)",
     # YXD-M2: a real BYOD dataset path through adaptation, reload and a result JSON; YXD-m3: image by path.
     "byod_records = read_detection_records(dataset_dir)",
     "byod_reloaded_metrics = YoloxDetectionPipeline.load_artifact(byod_artifact).evaluate(byod_held)",

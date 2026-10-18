@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from collections.abc import Mapping, Sequence
@@ -80,6 +81,8 @@ PREREGISTERED_SETTINGS: dict[str, Any] = {
     "min_ap_gain": MIN_AP_GAIN,
     "max_ap50_drop": MAX_AP50_DROP,
     "keep_baseline_gain": KEEP_BASELINE_GAIN,
+    # Amendment 1 (A1): the decision is taken on a hosted T4 only; any other device is exploratory.
+    "device_class": "cuda-t4",
 }
 
 # The hosted T4 run that is the evaluation of record (date, notebook blob, numbers); None until it exists.
@@ -89,6 +92,16 @@ TEST_LOOK_PREREGISTERED = "pre-registered evaluation (this runtime)"
 TEST_LOOK_REPRODUCTION = "reproduction"
 TEST_LOOK_EXPLORATORY = "not scored (exploratory)"
 TEST_LOOK_MASKED = "not scored (fresh test masked for a development check)"
+
+
+def device_class(torch_module: Any) -> str:
+    """'cuda-t4' on a CUDA device whose name contains T4, 'cuda-other' on any other GPU, else 'cpu' (amendment 1, A1)."""
+    try:
+        if not torch_module.cuda.is_available():
+            return "cpu"
+        return "cuda-t4" if "T4" in str(torch_module.cuda.get_device_name(0)) else "cuda-other"
+    except Exception:  # noqa: BLE001 - an unreadable device is never the pre-registered one
+        return "unknown"
 
 
 def record_digest(record: Mapping[str, Any]) -> str:
@@ -311,9 +324,10 @@ class LookLedger:
     """Counts fresh-test scorings in this runtime, crash-safely.
 
     A look is recorded only by `record()`, after the report is safely on disk. Whether the pre-registered slot is
-    spent is decided from the outputs as well as the ledger: a readable main report means every later scoring is a
-    reproduction, even if the ledger was lost; a missing or unreadable main report is (re)written unless the ledger
-    proves a completed look. A corrupt or empty ledger reads as empty and never crashes a run.
+    spent is decided from the outputs as well as the ledger (amendment 1, A3): an existing main report file (readable
+    or not), any reproduction report, or a ledger entry means every later scoring is a reproduction. Only an absent
+    main report with no other evidence re-opens the slot; an interrupted atomic write leaves no main report, so it is
+    not a look. A corrupt, empty or non-finite ledger reads as empty and never crashes a run.
     """
 
     def __init__(self, path: str | Path, outputs_dir: str | Path = "outputs", stem: str = "yolox_detection") -> None:
@@ -325,7 +339,12 @@ class LookLedger:
         data = read_json_or_none(self.path)
         if not isinstance(data, dict):
             return {}
-        return {k: int(v) for k, v in data.items() if isinstance(v, int | float) and not isinstance(v, bool)}
+        # Amendment 1 (A3): NaN / Infinity (which json accepts) are corrupt entries, ignored like any other.
+        return {
+            k: int(v)
+            for k, v in data.items()
+            if isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+        }
 
     def _save(self, counts: Mapping[str, int]) -> None:
         atomic_write_text(self.path, json.dumps(dict(counts)))
@@ -349,7 +368,9 @@ class LookLedger:
             raise ValueError(f"unknown scoring mode {mode!r}")
         counts = self._load()
         if mode == "preregistered":
-            if read_json_or_none(self.main_report) is not None or counts.get("preregistered_completed", 0) > 0:
+            # Amendment 1 (A3): reports are written atomically, so a main report FILE that exists (even unreadable)
+            # was completed once; it, any reproduction report, or the ledger proves the slot is spent.
+            if self.main_report.exists() or self._highest("reproduction") > 0 or counts.get("preregistered_completed", 0) > 0:
                 n = max(self._highest("reproduction"), counts.get("reproductions", 0)) + 1
                 return TEST_LOOK_REPRODUCTION, f"_reproduction_{n}"
             return TEST_LOOK_PREREGISTERED, ""

@@ -14,6 +14,7 @@ import hashlib
 import importlib
 import itertools
 import json
+import os
 import subprocess
 import types
 from pathlib import Path
@@ -32,6 +33,7 @@ NEEDLES = {
     7: "BASELINE_FINGERPRINT = ",
     8: "grid_rows, grid_models = {}, {}",
     9: "ledger = LookLedger(",
+    10: "new_records = sign_dataset(3, seed=NEW_DATA_SEED)",
 }
 
 
@@ -73,6 +75,10 @@ class _GridStub(_StubPipe):
         return out
 
 
+def _torch(available: bool, name: str = "Tesla T4"):
+    return types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: available, get_device_name=lambda index=0: name))
+
+
 @pytest.fixture(scope="module")
 def notebook() -> dict:
     return json.loads(NOTEBOOK.read_text(encoding="utf-8"))
@@ -91,7 +97,7 @@ def harness(notebook, tmp_path, monkeypatch):
     ns.update({k: v for k, v in vars(protocol).items() if not k.startswith("__")})
     ns[PIPELINE_CLASS] = _GridStub
     ns["paired_bootstrap"] = functools.partial(protocol.paired_bootstrap, n_boot=200)
-    ns["torch"] = types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: True))
+    ns["torch"] = _torch(True, "Tesla T4")
     calls: list[int] = []
     real_sign = samples_module.sign_dataset
 
@@ -134,7 +140,8 @@ def test_default_gpu_run_scores_the_fresh_test_once_then_labels_a_rerun_a_reprod
     again = _report(tmp, "_reproduction_1")
     assert again["test_look"] == "reproduction" and again["fresh_test"] is not None
     assert (tmp / f"{STEM}_evaluation_report.json").read_bytes() == before
-    assert {p.name for p in (tmp / "grid").iterdir()} == {"C0.json", "C1.json", "C2.json"}
+    assert {p.name for p in (tmp / "grid" / "run_1").iterdir()} == {"C0.json", "C1.json", "C2.json"}
+    assert first["device"] == {"class": "cuda-t4", "name": "Tesla T4"}
 
 
 @pytest.mark.parametrize(
@@ -192,7 +199,7 @@ def test_a_changed_model_state_is_exploratory(harness) -> None:
     ns["adapter"].finetune([], epochs=1)
     run(sections=(9,))
     assert _report(tmp, "_exploratory_1")["fresh_test"] is None
-    assert "the model in hand is not the selected system" in _report(tmp, "_exploratory_1")["reasons"]
+    assert "the model in hand is not the selected system of this Section 8 run" in _report(tmp, "_exploratory_1")["reasons"]
 
 
 @pytest.mark.parametrize("failure", ["raise", "digest"])
@@ -231,7 +238,7 @@ def test_an_interrupted_report_write_is_not_a_look(harness) -> None:
     assert _report(tmp)["test_look"] == protocol.TEST_LOOK_PREREGISTERED
 
 
-@pytest.mark.parametrize("ledger_text", ["", "{not json", "[1, 2]", '{"preregistered_completed": "x"}'])
+@pytest.mark.parametrize("ledger_text", ["", "{not json", "[1, 2]", '{"preregistered_completed": "x"}', '{"preregistered_completed": NaN}', '{"preregistered_completed": Infinity}'])
 def test_a_corrupt_or_empty_ledger_never_crashes_or_relabels(harness, ledger_text) -> None:
     run, ns, tmp = harness
     (tmp / "work").mkdir(parents=True)
@@ -243,15 +250,16 @@ def test_a_corrupt_or_empty_ledger_never_crashes_or_relabels(harness, ledger_tex
     assert _report(tmp, "_reproduction_1")["test_look"] == "reproduction"
 
 
-def test_an_empty_main_report_is_rewritten_only_when_the_ledger_shows_no_completed_look(harness) -> None:
+def test_an_existing_main_report_file_spends_the_slot_even_when_unreadable(harness) -> None:
+    """Amendment 1 (A3), reviewer probe P3 inverted: report emptied and ledger corrupted after a look -> reproduction."""
     run, ns, tmp = harness
-    tmp.mkdir()
-    (tmp / f"{STEM}_evaluation_report.json").write_text("", encoding="utf-8")
     run()
     assert _report(tmp)["test_look"] == protocol.TEST_LOOK_PREREGISTERED
     (tmp / f"{STEM}_evaluation_report.json").write_text("", encoding="utf-8")
+    (tmp / "work" / "look_ledger.json").write_text("{bad", encoding="utf-8")
     run(sections=(9,))
     assert _report(tmp, "_reproduction_1")["test_look"] == "reproduction"
+    assert (tmp / f"{STEM}_evaluation_report.json").read_text(encoding="utf-8") == ""
 
 
 def test_a_masked_run_never_generates_the_fresh_test(harness, monkeypatch) -> None:
@@ -374,6 +382,98 @@ def test_notebook_stamp_names_a_commit_that_contains_the_carried_modules(noteboo
         try:
             committed = subprocess.check_output(["git", "-C", str(ROOT), "show", f"{revision}:{rel}"])
         except (OSError, subprocess.CalledProcessError):
+            if os.environ.get("CI"):
+                pytest.fail(f"the stamped commit {revision} is not in this checkout; CI must fetch full history")
             pytest.skip("the stamped commit is not in this clone (shallow checkout)")
         assert committed.decode("utf-8").replace("\r\n", "\n") == (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n"), rel
     assert notebook["metadata"]["dimer"]["notebook_kind"] == "TUTORIAL"
+
+
+# ---- round 2: reviewer probes P1-P6 inverted, and F7 ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("available", "name", "expected"), [(False, "cpu", "cpu"), (True, "NVIDIA L4", "cuda-other"), (True, "NVIDIA A100-SXM4-40GB", "cuda-other")])
+def test_only_a_t4_can_score_the_fresh_test_whatever_run_grid_says(harness, available, name, expected) -> None:
+    """Amendment 1 (A1), reviewer probe P1 inverted: RUN_GRID="on" on a CPU or a non-T4 GPU is exploratory."""
+    run, ns, tmp = harness
+    ns["torch"] = _torch(available, name)
+    run(**{'RUN_GRID = "auto"': 'RUN_GRID = "on"'})
+    report = _report(tmp, "_exploratory_1")
+    assert report["fresh_test"] is None and report["device"]["class"] == expected
+    assert "device_class" in report["settings_differing"] and report["grid"]["complete"] is True
+    assert protocol.FRESH_TEST_POOL["seed"] not in ns["_seeds"]
+    assert not (tmp / f"{STEM}_evaluation_report.json").exists()
+
+
+def test_exploratory_reruns_never_overwrite_earlier_grid_rows(harness) -> None:
+    """Reviewer probe P4 inverted: one grid folder per Section 8 execution."""
+    run, ns, tmp = harness
+    run()
+    before = (tmp / "grid" / "run_1" / "C0.json").read_bytes()
+    run(sections=(8, 9), **{"FREEZE_BACKBONE = True": "FREEZE_BACKBONE = False"})
+    assert (tmp / "grid" / "run_1" / "C0.json").read_bytes() == before
+    assert json.loads((tmp / "grid" / "run_2" / "C0.json").read_text(encoding="utf-8"))["settings"]["freeze_backbone"] is False
+
+
+class _Interrupting(_GridStub):
+    interrupt_epochs: set[int] = set()
+
+    def finetune(self, records, **kwargs):
+        if kwargs.get("epochs") in type(self).interrupt_epochs:
+            raise KeyboardInterrupt
+        return super().finetune(records, **kwargs)
+
+
+@pytest.mark.parametrize("epochs", [6, 10, 8])  # C0, C1, C2
+def test_an_interrupted_section8_rerun_leaves_nothing_section9_can_score(harness, epochs) -> None:
+    """Amendment 1 (A2), reviewer probe P6 inverted: interrupt during C0, C1 or C2 after an exploratory run."""
+    run, ns, tmp = harness
+    ns[PIPELINE_CLASS] = _Interrupting
+    _Interrupting.interrupt_epochs = set()
+    run(**{"FREEZE_BACKBONE = True": "FREEZE_BACKBONE = False"})
+    assert _report(tmp, "_exploratory_1")["fresh_test"] is None
+    _Interrupting.interrupt_epochs = {epochs}
+    with pytest.raises(KeyboardInterrupt):
+        run(sections=(8,))
+    _Interrupting.interrupt_epochs = set()
+    assert ns["selection"] is None and ns["adapter"] is None and ns["grid_status"]["complete"] is False
+    with pytest.raises(RuntimeError, match="Section 8 did not finish"):
+        run(sections=(9,))
+    assert protocol.FRESH_TEST_POOL["seed"] not in ns["_seeds"]
+    assert not (tmp / f"{STEM}_evaluation_report.json").exists()
+    run(sections=(8, 9))  # a complete re-run restores the pre-registered path
+    assert _report(tmp)["test_look"] == protocol.TEST_LOOK_PREREGISTERED
+
+
+def test_stale_selection_or_rows_left_in_memory_are_not_trusted(harness) -> None:
+    """A2 variants: Section 9 recomputes the grid check and the selection-to-row fingerprint match."""
+    run, ns, tmp = harness
+    run(sections=(6, 7, 8))
+    ns["grid_status"] = {"complete": True, "problems": []}
+    del ns["grid_rows"]["C2"]
+    run(sections=(9,))
+    report = _report(tmp, "_exploratory_1")
+    assert report["fresh_test"] is None and any("C2: not run" in r for r in report["reasons"])
+    run(sections=(8,))
+    ns["selection"] = dict(ns["selection"], fingerprint="stale")
+    run(sections=(9,))
+    assert _report(tmp, "_exploratory_2")["fresh_test"] is None
+
+
+def test_keep_baseline_sections_10_and_11_use_the_selected_baseline(harness, notebook, capsys) -> None:
+    """F7: when the rule keeps the baseline, Section 10 says so and runs the baseline; Section 11 exports it."""
+    run, ns, tmp = harness
+    _GridStub.adapted_quality = 0.0
+    run(sections=(6, 7, 8, 9, 10))
+    out = capsys.readouterr().out
+    assert "kept the pretrained baseline" in out and ns["selected_pipe"] is ns["baseline_pipe"]
+    section11 = next(s for s in _code(notebook) if "reloaded = YoloxDetectionPipeline.load_artifact(artifact_path)" in s or "load_artifact(artifact_path)" in s)
+    assert "selected_pipe.save_artifact(" in section11 and "adapter.save_artifact(" not in section11
+    assert "selected_val['ap']" in section11
+
+
+def test_device_class_helper() -> None:
+    assert protocol.device_class(_torch(False)) == "cpu"
+    assert protocol.device_class(_torch(True, "Tesla T4")) == "cuda-t4"
+    assert protocol.device_class(_torch(True, "NVIDIA L4")) == "cuda-other"
+    assert protocol.PREREGISTERED_SETTINGS["device_class"] == "cuda-t4"

@@ -190,6 +190,6 @@ def test_e2e_baseline_precedes_adaptation(notebook: dict) -> None:
 
 def test_e2e_artifact_is_exported_and_reloaded(notebook: dict) -> None:
     code = "\n".join(_source(c) for c in _cells(notebook, "code"))
-    assert "adapter.save_artifact(" in code
+    assert "selected_pipe.save_artifact(" in code
     assert "YoloxDetectionPipeline.load_artifact(" in code
-    assert "assert abs(reloaded_metrics['ap'] - adapter_val['ap']) < 1e-9" in code
+    assert "assert abs(reloaded_metrics['ap'] - selected_val['ap']) < 1e-9" in code
