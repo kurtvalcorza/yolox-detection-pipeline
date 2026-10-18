@@ -446,7 +446,7 @@ end to end: the VM run directory, the local copy, and the committed blob.
 - Runtime: Colab CLI 0.7.4, fresh Colab Tesla T4 (session `suite-yolox-d6794c9-c7f4`), started 2026-10-18 09:22:48 UTC, 144.7 s wall.
 - Code: commit `d6794c9`, notebook blob `bf60acf7`. Settings were the same as the record's: the round-2 settings, amendment 1 and every field at its default.
 - Role: **reproduction**, the second hosted look at fresh test 1160. Section 9 printed `test_look` "reproduction" and wrote the `_reproduction_1` files.
-- Evidence: `docs/execution-evidence/2026-10-18-d6794c9/`. The executed notebook and `run_summary.json` were copied byte for byte. In `exec.log`, lines 1 and 191 had the local run directory replaced with `<local-run-dir>/`.
+- Evidence: `docs/execution-evidence/2026-10-18-d6794c9/`. The executed notebook and `run_summary.json` were copied byte for byte. In `exec.log`, lines 1 and 256 had the local run directory replaced with `<local-run-dir>/`.
   - Captured SHA-256 of `exec.log`: `c3d8ee212880f312a078b2b09b8149ff27967971d2f4862af4b8f225ba81edbe`.
   - Committed SHA-256 of `exec.log`: `e0f886eaf76044c394fff3634524e1a1f53cc07e6f569d962816a3978862a6ec`.
   - `run_summary.json`: `68ed39db…cd92b`. Executed notebook: `160e5879…610f`.
