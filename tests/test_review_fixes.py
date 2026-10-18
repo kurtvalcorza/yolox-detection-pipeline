@@ -37,6 +37,7 @@ PACKAGE = TEMPLATE["package"]
 PREFIX = "YXX" if "yolox_x" in PACKAGE else "YXD"
 pipeline_module = importlib.import_module(f"{PACKAGE}.pipeline")
 samples_module = importlib.import_module(f"{PACKAGE}.samples")
+protocol_module = importlib.import_module(f"{PACKAGE}.protocol")
 NOTEBOOK = ROOT / "tutorials" / TEMPLATE["notebook_name"]
 PIPELINE_CLASS = TEMPLATE["pipeline_class"]
 
@@ -97,6 +98,8 @@ def _namespace(tmp_path: Path, monkeypatch) -> dict:
     monkeypatch.chdir(tmp_path)
     ns = {k: v for k, v in vars(pipeline_module).items() if not k.startswith("__")}
     ns.update({k: v for k, v in vars(samples_module).items() if not k.startswith("__")})
+    ns.update({k: v for k, v in vars(protocol_module).items() if not k.startswith("__")})
+    ns["selection"] = {"selected_config": "C0"}
     ns.update(json=json, io=io, Path=Path, Image=Image, OUTPUTS=tmp_path, WEIGHTS_DIR=tmp_path / "w", threshold=0.3, nms_threshold=0.3, EPOCHS=1, HOLDOUT=0.25, SEED=0, BATCH_SIZE=2, LEARNING_RATE=1e-3, FREEZE_BACKBONE=True, NOTEBOOK_SOURCE={"repository_revision": "r"}, pipe=_StubPipe(("stop sign",)))
     ns[PIPELINE_CLASS] = _StubPipe
     return ns
@@ -169,16 +172,20 @@ def test_M2_byod_dataset_branch_adapts_reloads_and_writes_a_result_with_no_code_
     assert result["split"]["held_out"] >= 2 and result["class_names"] == sorted(result["class_names"])
 
 
-def test_M2_byod_dataset_below_the_minimum_or_incompatible_is_refused(notebook: dict, tmp_path: Path, monkeypatch) -> None:
+def test_M2_byod_dataset_below_the_minimum_or_incompatible_is_refused(notebook: dict, tmp_path: Path, monkeypatch, capsys) -> None:
+    """R116-m7 (DAT20): a refused BYOD dataset prints one message naming the rule, writes nothing and raises nothing."""
     ns = _namespace(tmp_path, monkeypatch)
     small = _byod_dir(tmp_path, 4)
-    with pytest.raises(ValueError, match="at least 8 are needed"):
-        exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(small)!r}"}), ns)  # noqa: S102
+    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(small)!r}"}), ns)  # noqa: S102
+    assert re.search(r"BYOD dataset refused: .*at least 8 are needed.*earlier sections are kept", capsys.readouterr().out)
     other = tmp_path / "bad"
     other.mkdir()
     bad = _byod_dir(other, 9)
-    with pytest.raises(ValueError, match=r"label .* is not in class_names"):
-        exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(bad)!r}", 'BYOD_CLASS_NAMES = ""': 'BYOD_CLASS_NAMES = "only-this"'}), ns)  # noqa: S102
+    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(bad)!r}", 'BYOD_CLASS_NAMES = ""': 'BYOD_CLASS_NAMES = "only-this"'}), ns)  # noqa: S102
+    assert re.search(r"BYOD dataset refused: .*label .* is not in class_names", capsys.readouterr().out)
+    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': "BYOD_DATASET_DIR = 'no-such-dir'"}), ns)  # noqa: S102
+    assert "is not a directory" in capsys.readouterr().out
+    assert not (tmp_path / "byod_yolox_result.json").exists()
 
 
 # ---- M3: the guided layer --------------------------------------------------------------------------------------------
@@ -212,18 +219,7 @@ def test_m1_no_template_braces_and_only_the_documented_upstream_todo(notebook: d
     assert "the string might change, consider a better way" in (ROOT / "docs" / "UPSTREAM.md").read_text(encoding="utf-8")
 
 
-# ---- m2: re-running the fine-tune cell trains a fresh adapter ------------------------------------------------------
-
-
-def test_m2_rerunning_the_finetune_cell_trains_a_fresh_adapter(notebook: dict, tmp_path: Path, monkeypatch) -> None:
-    ns = _namespace(tmp_path, monkeypatch)
-    ns.update(train_records=[], SIGN_CLASSES=samples_module.SIGN_CLASSES)
-    source = _cell(notebook, "run = adapter.finetune(")
-    exec(source, ns)  # noqa: S102
-    first = ns["adapter"]
-    exec(source.replace("FREEZE_BACKBONE = True", "FREEZE_BACKBONE = False"), ns)  # noqa: S102
-    assert ns["adapter"] is not first and first.finetune_calls == 1 and ns["adapter"].finetune_calls == 1
-    assert ns["run"]["freeze_backbone"] is False and isinstance(ns["FINETUNE_SECONDS"], float)
+# ---- m2: re-running the fine-tune cell trains fresh models: tests/test_score_once.py ---------------------------
 
 
 # ---- m3: BYOD image by path, named decode errors, exactly one upload -------------------------------------------------
@@ -239,7 +235,7 @@ def test_m3_byod_image_by_path_runs_without_colab_and_corrupt_files_are_named(no
 
 
 @pytest.mark.parametrize("uploads", [{}, {"a.png": b"x", "b.png": b"y"}])
-def test_m3_cancelled_or_multi_file_upload_stops_with_the_rule(notebook: dict, tmp_path: Path, monkeypatch, uploads: dict) -> None:
+def test_m3_cancelled_or_multi_file_upload_stops_with_the_rule(notebook: dict, tmp_path: Path, monkeypatch, uploads: dict, capsys) -> None:
     ns = _namespace(tmp_path, monkeypatch)
     files = types.ModuleType("google.colab.files")
     files.upload = lambda: uploads
@@ -249,8 +245,8 @@ def test_m3_cancelled_or_multi_file_upload_stops_with_the_rule(notebook: dict, t
     google.colab = colab
     for name, module in (("google", google), ("google.colab", colab), ("google.colab.files", files)):
         monkeypatch.setitem(sys.modules, name, module)
-    with pytest.raises(RuntimeError, match=rf"Upload exactly one image \(received {len(uploads)}\)"):
-        exec(_byod_cell(notebook, **{"USE_BYOD_IMAGE = False": "USE_BYOD_IMAGE = True"}), ns)  # noqa: S102
+    exec(_byod_cell(notebook, **{"USE_BYOD_IMAGE = False": "USE_BYOD_IMAGE = True"}), ns)  # noqa: S102
+    assert f"BYOD image refused: Upload exactly one image (received {len(uploads)})" in capsys.readouterr().out
 
 
 # ---- m3 (status half): STATUS.md, README and the record agree on the restarted hosted run ---------------------------

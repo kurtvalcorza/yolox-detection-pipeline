@@ -4,7 +4,7 @@
 
 | Notebook | Profile | Mode | Spec | Standalone | Workflow | Runtime | Sample | BYOD | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| [`yolox_detection_finetune_colab.ipynb`](yolox_detection_finetune_colab.ipynb) | `E2E` | `GUIDED` | DIMER Notebook Specification 2.2 (standalone, §4; isolated `uv` environment, no runtime restart) | yes | COCO detection, then validate → split → baseline → bounded SimOTA fine-tune → evaluate → new-data inference → export → fresh reload | CPU (GPU used automatically when present) | automatic, drawn in code | optional, two branches, both off by default; image by `BYOD_IMAGE_PATH` or upload, dataset by `BYOD_DATASET_DIR` (`annotations.json` + images) or upload, through adaptation, reload and a result JSON | Candidate |
+| [`yolox_detection_finetune_colab.ipynb`](yolox_detection_finetune_colab.ipynb) | `E2E` | `GUIDED` | DIMER Notebook Specification 2.5 (standalone, §4; isolated `uv` environment, no runtime restart) | yes | COCO detection, then validate → split → baseline → bounded SimOTA fine-tune → evaluate → new-data inference → export → fresh reload | CPU (GPU used automatically when present) | automatic, drawn in code | optional, two branches, both off by default; image by `BYOD_IMAGE_PATH` or upload, dataset by `BYOD_DATASET_DIR` (`annotations.json` + images) or upload, through adaptation, reload and a result JSON | Candidate — amendment-2 evaluation of record on Colab T4, 2026-10-18 (blob `a9dd3990`, deterministic GPU): C1 selected, fresh test 3 AP 0.8933 vs baseline 0.1317, +0.7616, *improved*; reproduced exactly on 2026-10-18 (blob `6b295979`) (round-2 record, blob `5fe2ef5d`: +0.7211, history); see `docs/release-verification.md` |
 
 Candidate status and the gates that remain open are recorded in
 [`../docs/release-verification.md`](../docs/release-verification.md); clean-room execution on Kaggle Tesla T4 GPU is recorded in
@@ -30,8 +30,10 @@ behind a default-off flag:
 5. Probe channel order (BGR vs RGB) and degenerate inputs.
 6. Build and validate a 40-image labelled dataset over a three-class vocabulary that is not in COCO.
 7. Split it, re-head the detector, and measure a baseline **before** adapting.
-8. Run the bounded SimOTA fine-tune.
-9. Score the held-out split with COCO-style AP@[.50:.95] and AP50, against the baseline.
+8. Run the bounded SimOTA fine-tune: the pre-registered three-config grid on a GPU (chosen on a 40-image validation
+   pool), or the recorded selection C0 on a CPU (an exploratory run).
+9. Re-check every pre-registered setting, then score a 200-image fresh test against the baseline with a paired
+   image bootstrap; the 10-image exposed development test is shown for continuity and decides nothing.
 10. Detect on images from an unseen seed.
 11. Export the artifact, reload it from disk, and assert the reloaded model scores identically.
 12. Write every result as JSON with provenance.
@@ -45,8 +47,9 @@ is about 26 s. On a Kaggle T4 the previous version needed a restart after its in
 
 The notebook reports real measurements on **synthetic** data. Both the COCO demonstration scene and the
 adaptation dataset are drawn in code with Pillow — flat colours, hard edges, no lighting, no occlusion.
-A held-out AP50 of 1.0 after fine-tuning says the plumbing works and the task is easy; it is not
-evidence about photographs, and the much lower AP@[.50:.95] is the more honest summary. Upstream's
+An AP50 of 1.0 on the exposed development test says the plumbing works and the task is easy; it is not
+evidence about photographs, and AP@[.50:.95] is the more honest summary. Even the fresh test is the same
+renderer drawing the same shapes, so it measures in-distribution generalisation on drawn signs. Upstream's
 published 40.5 COCO mAP for YOLOX-S is neither reproduced nor checked.
 
 ## Regenerating
