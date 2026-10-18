@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -520,6 +521,151 @@ def split_records(
 # --- Evaluation -------------------------------------------------------------------------------
 
 
+def match_detections(
+    predictions: Sequence[Sequence[Mapping[str, Any]]],
+    references: Sequence[Mapping[str, Any]],
+    class_names: Sequence[str],
+    *,
+    iou_thresholds: Sequence[float] = COCO_IOU_THRESHOLDS,
+) -> dict[str, Any]:
+    """Per-image COCO matching, kept so average precision can be recomputed on any reweighting of the images.
+
+    Matching is the COCO rule and happens inside one image: within a class, that image's detections in
+    descending score order each claim the highest-IoU unclaimed reference above the threshold. Because
+    no match crosses an image, an image-level bootstrap only has to reweight these rows, never re-match.
+    Returns ``{"thresholds", "class_names", "n_images", "references": {class: [count per image]},
+    "rows": {(threshold, class): (scores, hits, image_index)}}``.
+    """
+    if len(predictions) != len(references):
+        raise ValueError(f"{len(predictions)} prediction lists but {len(references)} references")
+    names = list(class_names)
+    ref_counts = {name: [0] * len(references) for name in names}
+    rows: dict[tuple[float, str], tuple[list[float], list[bool], list[int]]] = {}
+    for threshold in iou_thresholds:
+        for name in names:
+            scores: list[float] = []
+            hits: list[bool] = []
+            owners: list[int] = []
+            for index, (dets, reference) in enumerate(zip(predictions, references, strict=True)):
+                ref_boxes = [
+                    box
+                    for box, label in zip(reference["boxes"], reference["labels"], strict=True)
+                    if label == name
+                ]
+                ref_counts[name][index] = len(ref_boxes)
+                claimed = [False] * len(ref_boxes)
+                candidates = sorted((d for d in dets if d["label"] == name), key=lambda d: -float(d["score"]))
+                for det in candidates:
+                    best, best_iou = -1, 0.0
+                    for j, ref_box in enumerate(ref_boxes):
+                        if claimed[j]:
+                            continue
+                        value = box_iou(det["box"], ref_box)
+                        if value > best_iou:
+                            best, best_iou = j, value
+                    hit = best >= 0 and best_iou >= threshold
+                    if hit:
+                        claimed[best] = True
+                    scores.append(float(det["score"]))
+                    hits.append(hit)
+                    owners.append(index)
+            rows[(float(threshold), name)] = (scores, hits, owners)
+    return {
+        "thresholds": [float(t) for t in iou_thresholds],
+        "class_names": names,
+        "n_images": len(references),
+        "references": ref_counts,
+        "rows": rows,
+    }
+
+
+_RECALL_POINTS = np.linspace(0.0, 1.0, 101)
+
+
+def _class_ap(scores: np.ndarray, hits: np.ndarray, weights: np.ndarray, n_references: float) -> float:
+    """101-point interpolated AP of one class at one IoU threshold, from score-sorted rows.
+
+    Tie rule (review R116-S1): detections that share a score are one operating point, accepted together, so
+    the result never depends on the order of the images (a constant-score detector gets one AP). For
+    distinct scores this is exactly the usual per-detection curve. ``weights`` are the per-row image
+    weights (1 everywhere for the plain score; bootstrap multiplicities otherwise).
+    """
+    if scores.size == 0:
+        return 0.0
+    true_positives = np.cumsum(weights * hits)
+    false_positives = np.cumsum(weights * (~hits))
+    last_of_tie = np.append(scores[1:] != scores[:-1], True)
+    true_positives, false_positives = true_positives[last_of_tie], false_positives[last_of_tie]
+    recall = true_positives / n_references
+    precision = true_positives / np.maximum(true_positives + false_positives, 1e-12)
+    precision = np.maximum.accumulate(precision[::-1])[::-1]
+    sampled = np.zeros_like(_RECALL_POINTS)
+    indices = np.searchsorted(recall, _RECALL_POINTS, side="left")
+    valid = indices < len(precision)
+    sampled[valid] = precision[indices[valid]]
+    return float(sampled.mean())
+
+
+_PreparedRows = dict[tuple[float, str], tuple[np.ndarray, np.ndarray, np.ndarray]]
+
+
+def prepared_matches(matches: Mapping[str, Any]) -> _PreparedRows:
+    """The match rows as score-sorted numpy arrays (a stable sort; ties are resolved by ``_class_ap``)."""
+    out = {}
+    for key, (scores, hits, owners) in matches["rows"].items():
+        scores_a = np.asarray(scores, dtype=float)
+        order = np.argsort(-scores_a, kind="stable")
+        hits_a, owners_a = np.asarray(hits, dtype=bool), np.asarray(owners, dtype=int)
+        out[key] = (scores_a[order], hits_a[order], owners_a[order])
+    return out
+
+
+def ap_from_matches(
+    matches: Mapping[str, Any],
+    image_weights: Sequence[float] | np.ndarray | None = None,
+    *,
+    prepared: _PreparedRows | None = None,
+) -> dict[str, Any]:
+    """Average precision from a ``match_detections`` table, optionally with one weight per image."""
+    n_images = matches["n_images"]
+    weights = np.ones(n_images) if image_weights is None else np.asarray(image_weights, dtype=float)
+    prepared = prepared if prepared is not None else prepared_matches(matches)
+    ref_totals = {name: float(np.dot(weights, counts)) for name, counts in matches["references"].items()}
+    per_threshold: dict[float, dict[str, float]] = {}
+    for threshold in matches["thresholds"]:
+        per_class: dict[str, float] = {}
+        for name in matches["class_names"]:
+            if ref_totals[name] <= 0:
+                continue  # a class with no references contributes no AP, as in COCO
+            scores, hits, owners = prepared[(threshold, name)]
+            per_class[name] = _class_ap(scores, hits, weights[owners], ref_totals[name])
+        per_threshold[threshold] = per_class
+    means = {
+        threshold: (float(np.mean(list(values.values()))) if values else 0.0)
+        for threshold, values in per_threshold.items()
+    }
+    return {
+        "ap": float(np.mean(list(means.values()))) if means else 0.0,
+        "ap50": means.get(0.5, 0.0),
+        "ap75": means.get(0.75, 0.0),
+        "per_class_ap50": per_threshold.get(0.5, {}),
+        "scored_classes": sorted({name for values in per_threshold.values() for name in values}),
+    }
+
+
+def tied_score_groups(matches: Mapping[str, Any]) -> int:
+    """Score groups (one class, IoU 0.50) that hold two or more detections with both hits and misses."""
+    groups = 0
+    for (threshold, _name), (scores, hits, _owners) in matches["rows"].items():
+        if abs(threshold - 0.5) > 1e-9:
+            continue
+        by_score: dict[float, set[bool]] = {}
+        for score, hit in zip(scores, hits, strict=True):
+            by_score.setdefault(score, set()).add(hit)
+        groups += sum(1 for kinds in by_score.values() if len(kinds) == 2)
+    return groups
+
+
 def average_precision(
     predictions: Sequence[Sequence[Mapping[str, Any]]],
     references: Sequence[Mapping[str, Any]],
@@ -536,72 +682,22 @@ def average_precision(
     Precision is interpolated over 101 recall points, AP is averaged over classes that have at least
     one reference, and ``ap`` is the mean over ``iou_thresholds``.
 
+    **Tied scores** are one operating point: all detections with the same score are accepted together.
+    pycocotools instead keeps image order inside a tie, which lets a constant-score detector report an
+    AP anywhere in a range depending only on how the images are listed (review R116-S1). With distinct
+    scores the two rules agree exactly. ``tied_score_groups`` counts the groups that mix hits and misses.
+
     This is a faithful small implementation, not ``pycocotools``: it has no area ranges and no crowd
     handling, and it scores whatever list it is handed rather than applying the per-image detection
     cap itself (``evaluate`` applies ``MAX_EVAL_DETECTIONS`` before calling in). It must not be
     compared against published COCO numbers; it exists to score a tutorial's own held-out images.
     """
-    if len(predictions) != len(references):
-        raise ValueError(f"{len(predictions)} prediction lists but {len(references)} references")
-    names = list(class_names)
-    recall_points = np.linspace(0.0, 1.0, 101)
-    per_threshold: dict[float, dict[str, float]] = {}
-    for threshold in iou_thresholds:
-        per_class: dict[str, float] = {}
-        for name in names:
-            scored: list[tuple[float, bool]] = []
-            n_references = 0
-            for dets, reference in zip(predictions, references, strict=True):
-                ref_boxes = [
-                    box
-                    for box, label in zip(reference["boxes"], reference["labels"], strict=True)
-                    if label == name
-                ]
-                n_references += len(ref_boxes)
-                claimed = [False] * len(ref_boxes)
-                candidates = sorted((d for d in dets if d["label"] == name), key=lambda d: -float(d["score"]))
-                for det in candidates:
-                    best, best_iou = -1, 0.0
-                    for j, ref_box in enumerate(ref_boxes):
-                        if claimed[j]:
-                            continue
-                        value = box_iou(det["box"], ref_box)
-                        if value > best_iou:
-                            best, best_iou = j, value
-                    hit = best >= 0 and best_iou >= threshold
-                    if hit:
-                        claimed[best] = True
-                    scored.append((float(det["score"]), hit))
-            if n_references == 0:
-                continue  # a class with no references contributes no AP, as in COCO
-            scored.sort(key=lambda pair: -pair[0])
-            true_positives = np.cumsum([1 if hit else 0 for _score, hit in scored])
-            false_positives = np.cumsum([0 if hit else 1 for _score, hit in scored])
-            if not scored:
-                per_class[name] = 0.0
-                continue
-            recall = true_positives / n_references
-            precision = true_positives / np.maximum(true_positives + false_positives, 1)
-            # Monotone envelope, then sample at the 101 recall points (COCO's interpolation).
-            precision = np.maximum.accumulate(precision[::-1])[::-1]
-            sampled = np.zeros_like(recall_points)
-            indices = np.searchsorted(recall, recall_points, side="left")
-            valid = indices < len(precision)
-            sampled[valid] = precision[indices[valid]]
-            per_class[name] = float(sampled.mean())
-        per_threshold[threshold] = per_class
-    scored_classes = sorted({name for values in per_threshold.values() for name in values})
-    means = {
-        threshold: (float(np.mean(list(values.values()))) if values else 0.0)
-        for threshold, values in per_threshold.items()
-    }
+    matches = match_detections(predictions, references, class_names, iou_thresholds=iou_thresholds)
     return {
-        "ap": float(np.mean(list(means.values()))) if means else 0.0,
-        "ap50": means.get(0.5, 0.0),
-        "ap75": means.get(0.75, 0.0),
-        "per_class_ap50": per_threshold.get(0.5, {}),
+        **ap_from_matches(matches),
         "iou_thresholds": [float(t) for t in iou_thresholds],
-        "scored_classes": scored_classes,
+        "tied_score_groups": tied_score_groups(matches),
+        "tie_rule": "tied scores form one operating point (order-independent)",
         "n_images": len(references),
         "n_references": sum(len(r["boxes"]) for r in references),
     }
@@ -1076,8 +1172,12 @@ class YoloxDetectionPipeline:
         nms_threshold: float = EVAL_NMS_THRESHOLD,
         iou_thresholds: Sequence[float] = COCO_IOU_THRESHOLDS,
         max_detections: int = MAX_EVAL_DETECTIONS,
+        keep_matches: bool = False,
     ) -> dict[str, Any]:
-        """Score a held-out set: average precision plus the request that produced the detections."""
+        """Score a held-out set: average precision plus the request that produced the detections.
+
+        ``keep_matches=True`` adds the per-image ``match_detections`` table under ``matches``, which the
+        image-level bootstrap of the reading rule reweights without re-running the model."""
         predictions = self.detect_many(
             [record["image"] for record in records], threshold=threshold, nms_threshold=nms_threshold
         )
@@ -1085,8 +1185,14 @@ class YoloxDetectionPipeline:
         # COCO's per-image cap, applied to the score-ordered detections before matching.
         predictions = [dets[:max_detections] for dets in predictions]
         metrics = average_precision(predictions, records, self.class_names, iou_thresholds=iou_thresholds)
+        extra: dict[str, Any] = {}
+        if keep_matches:
+            extra["matches"] = match_detections(
+                predictions, records, self.class_names, iou_thresholds=iou_thresholds
+            )
         return {
             **metrics,
+            **extra,
             "threshold": _check_threshold(threshold, "threshold"),
             "nms_threshold": _check_threshold(nms_threshold, "nms_threshold"),
             "max_detections": max_detections,
@@ -1094,13 +1200,22 @@ class YoloxDetectionPipeline:
             "adapted": self.adapted,
             "class_names": list(self.class_names),
             "implementation": (
-                "package-local average_precision: COCO matching and 101-point interpolation, without "
-                "pycocotools' area ranges, detection cap or crowd handling — not comparable to "
-                "published COCO numbers"
+                "package-local average_precision: COCO matching and 101-point interpolation, tied scores "
+                "as one operating point, without pycocotools' area ranges or crowd handling — not "
+                "comparable to published COCO numbers"
             ),
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,
         }
+
+    def state_fingerprint(self) -> str:
+        """sha256 over the model's state_dict (names, shapes and float32 bytes): which weights are in hand."""
+        digest = hashlib.sha256()
+        for name, tensor in sorted(self.model.state_dict().items()):
+            value = tensor.detach().cpu().contiguous()
+            digest.update(f"{name}:{tuple(value.shape)}:{value.dtype}".encode())
+            digest.update(value.numpy().tobytes())
+        return digest.hexdigest()
 
     # -- artifact ------------------------------------------------------------------------------
 
@@ -1129,7 +1244,11 @@ class YoloxDetectionPipeline:
             "notes": notes or "",
             "state_dict": {k: v.detach().cpu() for k, v in self.model.state_dict().items()},
         }
-        torch.save(payload, artifact_path)
+        # Review R116-m4: write a sibling temporary file and rename it, so an interrupted save never leaves a
+        # half-written artifact in place of the previous one.
+        partial = artifact_path.with_name(f"{artifact_path.name}.partial")
+        torch.save(payload, partial)
+        os.replace(partial, artifact_path)
         return {
             "path": str(artifact_path),
             "bytes": artifact_path.stat().st_size,

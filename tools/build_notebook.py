@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a STANDALONE DIMER tutorial notebook (NOTEBOOK_SPEC 2.0 §4) from repository sources — /2.
+"""Generate a STANDALONE DIMER tutorial notebook (NOTEBOOK_SPEC 2.5 §4) from repository sources — /2.
 
 /2 adds to /1: multi-module packages (one tagged cell per module, topologically ordered, package-relative
 imports removed), template-declared rewrite rules, and extra pinned snapshots (`extra_weights`) for packages
@@ -27,8 +27,23 @@ import sys
 from pathlib import Path
 from typing import Any
 
-GENERATOR_VERSION = "build_notebook.py/2.1-swc-yolox"
-NOTEBOOK_SPEC = "2.2"
+GENERATOR_VERSION = "build_notebook.py/2.2-swc-yolox"
+NOTEBOOK_SPEC = "2.5"
+NOTEBOOK_KINDS = ("TUTORIAL", "DEMO", "WORKSHOP", "CAPSTONE")  # NOTEBOOK_SPEC 2.5 §3.7 (KND1)
+# NOTEBOOK_SPEC 2.5 §3.6.5 (DOC17-DOC21): the canonical use notice, after the title and before the first code cell.
+USE_NOTICE = (
+    "> **⚠️ Notice.** For research, training and evaluation only. Not validated for production,\n"
+    "> clinical, diagnostic or safety-critical use. Running this notebook downloads third-party\n"
+    "> model weights and datasets under their own licenses (see the model card) and uses compute\n"
+    "> on your own Colab or Kaggle account. Data you bring stays in your runtime, and you are\n"
+    "> responsible for having the right to use it. Results here are tutorial evidence, not\n"
+    "> benchmarks. Everything is provided \"as is\", without warranty of any kind. To the maximum\n"
+    "> extent permitted by law, the maintainers and the DIMER platform accept no liability for\n"
+    "> its use."
+)
+# /2.2-swc-yolox (row 116 review, 2026-10-18; ported from the fleet /2.3): spec 2.5 with `metadata.dimer.notebook_kind`
+# and the use notice; the environment variables the notebook reads are documented; a carried module that differs from
+# HEAD refuses to generate, so `generated_from.revision` always names a commit that contains the carried code.
 
 # /2.1: the `isolated_runtime` environment is the fleet's version 2.2 reference mechanism (ast-audio-classification-pipeline
 # and bioclip2-biodiversity-pipeline): a pinned uv wheel verified by size and SHA-256, a managed CPython of a fixed
@@ -205,6 +220,7 @@ def template_contract() -> dict[str, str]:
         "model_load": "OPTIONAL replacement for the default `<pipeline_class>.from_pretrained(weights_dir=WEIGHTS_DIR)` expression",
         "package_dir": "OPTIONAL repository-relative directory of the package (default 'src/<package>'; e.g. 'mitra_pipeline' for a root-level package)",
         "pins_file": "OPTIONAL repository-relative requirements file that REPLACES pyproject dependencies as the inline PINS: one `name==ver` or `name @ git+url@sha` per line; `--index-url URL`, `--extra-index-url URL`, `--find-links URL` lines are honoured (passed to pip in order); comments/blank lines ignored",
+        "notebook_kind": "OPTIONAL TUTORIAL | DEMO | WORKSHOP | CAPSTONE (default TUTORIAL; NOTEBOOK_SPEC 2.5 KND1)",
         "isolated_runtime": "OPTIONAL bool (default False): install the hash-locked pins into a separate uv environment with a managed CPython and route every later cell to a persistent worker there, so no manual restart is needed on runtimes that pre-import packages (NOTEBOOK_SPEC 2.2 §5); needs `managed_python`, `uv` and `lock`",
         "managed_python": "OPTIONAL (required with isolated_runtime): exact CPython version uv installs for the isolated environment",
         "uv": "OPTIONAL (required with isolated_runtime): {'version', 'url', 'bytes', 'sha256'} of the pinned manylinux x86_64 uv wheel",
@@ -597,9 +613,14 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
         if n_mod == 1
         else f"the repository's package ({n_mod} modules under `{ctx['pkg_rel']}/`, at revision `{ctx['module_revision'][:12]}`) verbatim in Section 2"
     )
+    kind = template.get("notebook_kind", "TUTORIAL")
+    if kind not in NOTEBOOK_KINDS:
+        raise SystemExit(f"template notebook_kind {kind!r} is not one of {NOTEBOOK_KINDS}")
     header = (
         f"# {template['title']}\n\n{badges}\n\n"
+        f"{USE_NOTICE}\n\n"
         f"**Profile:** `{template['profile']}`  \n"
+        f"**Kind:** `{kind}`  \n"
         f"**Mode:** `{mode}`  \n"
         f"**Notebook specification:** DIMER Notebook Specification {NOTEBOOK_SPEC} — **standalone** (§4)  \n"
         f"**Capability:** {template['capability']}\n\n"
@@ -667,7 +688,13 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
                 "the only cells that run in the kernel. If you re-run a single cell later, it still runs in the isolated "
                 "environment with the variables created so far; to start over, restart the session and choose **Run all**. "
                 "`DIMER_NOTEBOOK_CI_PREINSTALLED=1` lets an executor that has already installed exactly these pins run "
-                "every cell in its own kernel instead."
+                "every cell in its own kernel instead.\n\n"
+                "**Environment variables this notebook reads** (none selects data or a model; leave them unset): "
+                "`DIMER_ISOLATED_ENV` names the folder of the isolated environment (default `dimer_isolated_env` in the "
+                "working directory; set it only to reuse an environment built elsewhere); `DIMER_NOTEBOOK_CI_PREINSTALLED=1` "
+                "is the executor switch above; the router sets `DIMER_KERNEL_IS_COLAB` for its worker, and you never set it; "
+                "`DIMER_MASK_FRESH_TEST=1` is a maintainer switch for development checks, under which the evaluation section "
+                "never generates or scores the fresh test (the run is labelled masked)."
             )
         )
         add(_code(_ISOLATED_ROUTER, dict(form)))
@@ -799,6 +826,7 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
         "metadata": {
             "dimer": {
                 "notebook_profile": template["profile"],
+                "notebook_kind": kind,
                 "notebook_mode": mode,
                 "notebook_spec": NOTEBOOK_SPEC,
                 "standalone": True,
@@ -823,6 +851,22 @@ def to_bytes(notebook: dict[str, Any]) -> bytes:
     return (json.dumps(notebook, indent=1, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
 
 
+def uncommitted_modules(repo: Path, ctx: dict[str, Any]) -> list[str]:
+    """Carried modules whose working-tree text differs from HEAD's. Generation refuses while any is listed, so the
+    stamp `generated_from.revision` always names a commit that contains the carried code."""
+    out = []
+    for module in ctx["modules"]:
+        rel = f"{ctx['pkg_rel']}/{module}"
+        try:
+            committed = subprocess.check_output(["git", "-C", str(repo), "show", f"HEAD:{rel}"])
+        except (OSError, subprocess.CalledProcessError):
+            out.append(rel)
+            continue
+        if committed.decode("utf-8").replace("\r\n", "\n") != ctx["texts"][module].replace("\r\n", "\n"):
+            out.append(rel)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[1])
@@ -845,6 +889,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"OK: {out} is up to date ({len(rendered)} bytes)")
         return 0
+    stale = uncommitted_modules(repo, load_context(repo, template, "HEAD"))
+    if stale:
+        print(f"REFUSED: {', '.join(stale)} differ from HEAD; commit the carried modules first (ST5)", file=sys.stderr)
+        return 1
     rendered = to_bytes(render(repo, template))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(rendered)
