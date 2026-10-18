@@ -471,3 +471,37 @@ end to end: the VM run directory, the local copy, and the committed blob.
 The verdict is "improved" in both runs. The baseline is identical in both: fresh AP 0.1363 / AP50 0.1449, validation 0.1767, exposed development test 0.2083 / 0.2222.
 
 **Consequence.** Kurt ruled on 2026-10-18 that GPU training will be made deterministic and that a third fresh pool and a new evaluation of record will be added. See amendment 2. The record `ad795d2` and this reproduction stay as history.
+
+## Amendment 2 (2026-10-18, round 3): deterministic GPU training and fresh test 3
+
+**Status.** `docs/yolox-preregistration-amendment-2.md` was committed alone, before the code. The round-2
+record (`ad795d2`) and its reproduction 116b stay valid as history. Fresh test 2 (seed 1160, digest
+`6900526c80ac…`) is now an exposed test, scored by the round-2 record.
+
+**Fresh test 3.** `sign_dataset(200, seed=1162)`: 200 images and 386 boxes (stop 131, yield 126,
+speed-limit 129). SHA-256 under Pillow 11.3.0:
+`2c81a3b4929a8c74811cf47dfdedf3fe724800eb1e23d5fce884034c8af3c826`. It shares 0 images and 0 box layouts with
+any of these pools: training, the exposed development test, validation, fresh test 2 and seed 99. The median
+nearest-neighbour MAD is 0.0249–0.0264 against the earlier pools; it is 0.035 within training. It has never
+been scored.
+
+**Determinism.**
+- The carried protocol sets `CUBLAS_WORKSPACE_CONFIG=:4096:8` when the module is imported (Section 2),
+  before any CUDA work.
+- Section 8 calls `enable_determinism(torch, SEED)` before training. That sets:
+  - cuDNN deterministic, no benchmark;
+  - `torch.use_deterministic_algorithms(True)` without `warn_only`;
+  - seeded torch, numpy and random.
+- Batches are built in-process: no DataLoader, 0 workers.
+- The flags are a pre-registered setting and appear in every report. Section 8 prints a grid hash: SHA-256
+  of the grid rows without timings, which covers the loss curves, validation AP and the weight fingerprints.
+- An op without a deterministic CUDA kernel stops Section 8 with "STOP and report it".
+- Static review of the trainable path found no op on PyTorch's list of ops without a deterministic CUDA
+  kernel. That path is the head convs and BatchNorm, BCE and IoU losses, boolean-mask indexing (an
+  `index_put_` backward, which has a deterministic kernel) and SimOTA's no-grad `topk`/`argmax`/`index_put_`.
+  The neck's nearest upsample is frozen, so it has no backward. This is inferred, not run: the masked hosted
+  check is the test.
+
+**Evaluation of record under amendment 2:** none yet. `RECORDED_EVALUATION` is `None`. The orchestrator
+first runs the masked determinism check: two masked hosted T4 runs whose grid hash, validation AP,
+selection and loss curves must be identical. A grid-off CPU run keeps training the round-2 selection C1.
