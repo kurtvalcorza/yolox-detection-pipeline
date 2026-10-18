@@ -219,6 +219,7 @@ These are recorded behaviour, not defects, and should survive future edits:
 | 2026-09-15 | Same runtime, superseded | `yolox_detection_finetune_colab.ipynb` | blob `dd48b2167af1f0e088fddd2de5be6a64a3bcd721` at commit `2f79037` | **PASS** — 22/22 code cells, 39.3 s, identical results. Superseded by the row above after `load_artifact` gained the variant check; kept because the record should show which blob was actually executed at the time. |
 | 2026-09-15 | Kaggle GPU kernel (`kurtvalcorza/dimer-nb2-yolox-detection-finetune` v1), fresh container assigned **Tesla T4** (driver 580.159.04), Python 3.12.13, Linux 6.12.90; committed notebook executed in fresh IPython interpreter via `nbclient 0.10.2` | `yolox_detection_finetune_colab.ipynb` | blob `5c09465debca9e836854b91e8b671e0728b03b67` at commit `8bcfda9` | **PASS after a manual restart** (not one-pass evidence; see gate 6) — 22/22 code cells, 182.3 s wall (pass 1: 155.2 s install + restart; pass 2: 27.0 s full run); matched the smoke figures in AP50 and geometry, not in AP@[.50:.95] (GPU run-to-run and code differences; CUDA determinism is not set): baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.8403 / AP50 1.0000, loss 6.2880 → 1.5985, 1,891,096 of 8,938,456 parameters trained, COCO IoU 0.946/0.914/0.946/0.000/0.959, artifact 35,998,883 bytes over 462 tensors, fresh reload identical (reloaded AP 0.8403 / AP50 1.0000), tampered artifact refused, all five new-data sign objects correctly detected (same-label IoU 0.871–0.943). 2 files, 72 MB staged (`yolox_s.pth`). |
 | 2026-10-10 (09:52:59 UTC start) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab Tesla T4 VM (session `suite-yolox-2c3d8bc-c7f4`), committed blob fetched at the commit and checked before the VM was allocated; kernel Python 3.13.15, isolated CPython 3.12.12 (32 locked packages, setup 56 s), `torch 2.14.0+cu130`, `torchvision 0.29.0+cu130`, `cuda:0`; default path, every form field at its default | `yolox_detection_finetune_colab.ipynb` (`NOTEBOOK_SOURCE.repository_revision` `b420ebea066d`, `module_sha256` `2f7b3af55ee6…`, generator `build_notebook.py/2.1-swc-yolox`, `notebook_spec` 2.2) | blob `fe56cb6950f3bac15677b7f1e2931a665ee60b91` at commit `2c3d8bc62b255eccd82a1b9b62eec57d872933d8` | **PASS** — one pass, no restart, 0 errors; 24/24 code cells in order (cells 4–13, the ten carried modules, print nothing); 103.3 s wall; `yolox_s.pth` 72,089,125 bytes digest-verified; COCO scene 4/5 matched (IoU 0.946/0.914/0.946/0.000/0.959); RGB order 5 detections, stop sign 0.839; blank and noise 0 boxes at demo thresholds; 30/10 split; baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.7766 / AP50 1.0 / AP75 1.0; loss 6.2880 → 1.5954 in 5.9 s, `num_fg` 7.87–8.87, 1,891,096 of 8,938,456 parameters trained; new-data seed 99: all five objects correctly labelled, no spurious boxes; artifact 35,998,883 bytes over 462 tensors, fresh reload identical, tampered artifact refused. Evidence in `docs/execution-evidence/2026-10-10-2c3d8bc/`: executed notebook SHA-256 `3d3b6433ffa2a3767204f511ec4a561cefa56f15514bf7215de49b49a270176f`, `run_summary.json` `dca98837888981aedd968cc70af01fe35e0311e5cac4250e977a1ff9e3298f4b`, `exec.log` `e4a5c5f290d2b2b454a2d22ba0c4b3dc834c4219089f7bf27fdfd3fe46f4c79e`. Not exercised: both BYOD branches, the Section 12 activity, a browser Run all |
+| 2026-10-18 (08:49:26 UTC start) | Colab CLI 0.7.4 sequential execution (`colab exec -f`, not a browser Run all; order from `exec.log`, no execution counts), fresh Colab Tesla T4 VM (session `suite-yolox-ad795d2-c7f4`), committed blob fetched at the commit and checked before the VM was allocated; kernel Python 3.13.15, isolated CPython 3.12.12 (32 locked packages, setup 46 s), `torch 2.14.0+cu130`, `torchvision 0.29.0+cu130`, `cuda:0`, device class `cuda-t4`; default path, every form field at its default | `yolox_detection_finetune_colab.ipynb` (`NOTEBOOK_SOURCE.repository_revision` `b242f44c2c37`, `module_sha256` `a5292930cd81…`, generator `build_notebook.py/2.2-swc-yolox`, `notebook_spec` 2.5) | blob `5fe2ef5d4628ab20855ffbf011e76c9ed9891077` at commit `ad795d20747cd867e8f935295441e594b0944db3` | **PASS — pre-registered evaluation of record** (first hosted run of the pre-registered settings and amendment 1; first scoring of the 200-image fresh test by any run). One pass, no restart, 0 errors; 25/25 code cells in order (14 print output); 134.6 s wall. Grid C0 / C1 / C2 validation AP 0.6966 / 0.8554 / 0.7122 (AP50 1.0 each), C1 selected; fresh test C1 AP 0.8573 vs baseline 0.1363, +0.7211, 95 % CI [0.6983, 0.7435], verdict *improved* (the baseline's class head is untrained, so a large gain was expected); exposed development test C1 AP 0.8516 / AP50 1.0. Details and hashes: "Hosted T4 evaluation of record (2026-10-18)" below; evidence in `docs/execution-evidence/2026-10-18-ad795d2/`. Not exercised: both BYOD branches, the Section 14 activity, a browser Run all |
 
 ## 2026-10-05 review fixes — verification pending
 
@@ -279,9 +280,11 @@ true, `settings_differing` empty, grid complete. These numbers were not used to 
 - Old → new: the default configuration changes from C0 (chosen on the exposed split) to the
   pre-registered rule's choice. CPU picks C1. The hosted T4 grid decides.
 
-**Evaluation of record:** none yet. Hosted fresh-test looks: 0. `RECORDED_EVALUATION` is `None` until
-the first hosted T4 Run all with every setting at its default. That run is the evaluation of record,
-and later identical hosted runs are reproductions.
+**Evaluation of record:** the Colab CLI T4 run of 2026-10-18 (commit `ad795d2`, blob `5fe2ef5d`); see
+"Hosted T4 evaluation of record (2026-10-18)" below. Hosted fresh-test looks: 1. Reproductions: none yet.
+`RECORDED_EVALUATION` in `protocol.py` is still `None` (recording it regenerates the notebook), so until then
+a later identical hosted run labels itself "pre-registered evaluation (this runtime)", not "reproduction";
+this file is what says it is a reproduction.
 
 **Redaction (review R116-m3, own commit).** In `execution-evidence/2026-10-10-2c3d8bc/exec.log`, lines
 1 and 191 had the operator's home-directory run path replaced with `<local-run-dir>/`.
@@ -304,4 +307,115 @@ number above matches the earlier records where the two overlap.
 - Erratum: |CPU - T4| <= 0.034 and T4 - T4 = 0.064 AP@[.50:.95] for C0 on the exposed development test.
   The "about 0.1 AP" in the pre-registration is wrong. The rule is unchanged.
 - No fresh-test score exists: the CPU development look was masked, and there are 0 hosted looks.
-  `RECORDED_EVALUATION` is still `None`.
+  `RECORDED_EVALUATION` is still `None`. (State at round 2; superseded by the 2026-10-18 evaluation of record below.)
+
+## Hosted T4 evaluation of record (2026-10-18)
+
+**REL13 label for every number in this section:** Colab CLI 0.7.4, fresh Colab Tesla T4, 2026-10-18,
+commit `ad795d20747cd867e8f935295441e594b0944db3`, notebook blob `5fe2ef5d4628ab20855ffbf011e76c9ed9891077`
+(embedded `NOTEBOOK_SOURCE.repository_revision` `b242f44`; `b242f44..ad795d2` only regenerates the notebook).
+Role: **pre-registered evaluation of record**, the first hosted run of the pre-registered settings and
+amendment 1, and the first time any run scored the 200-image fresh test. Later hosted runs with identical
+settings are reproductions of this evaluation. Executor: Colab CLI 0.7.4 sequential execution
+(`colab exec -f`), not a browser Run all. Forms and uploads were not exercised. Status stays **Candidate**.
+
+**Identity and runtime.**
+- The VM ran a byte-for-byte copy of the committed notebook: input SHA-256 `b7bfaf7e…`, git blob
+  `5fe2ef5d`, unchanged after the run.
+- `inspect_run.py` passed: 56/56 cells with the same ids and order, and source identity OK.
+- Hardware T4 (`colab status`). Section 8 printed `device Tesla T4 (cuda-t4)`; `cuda:0`;
+  `torch 2.14.0+cu130`.
+- TF32: neither the notebook nor the package sets or prints a TF32 flag. The profile is float32, and
+  the Tesla T4 (Turing) has no TF32 mode, so TF32 does not apply to this run. That is inferred from the
+  hardware, not printed by the run.
+- CUDA determinism is not set. C0 and C1 share a seed but already differ at epoch 2 on the T4; on CPU
+  their first six epochs are identical.
+
+**Score-once checks (as printed).**
+- Section 9 printed `test_look` "pre-registered evaluation (this runtime)" and wrote
+  `outputs/yolox_detection_evaluation_report.json`. Settings: batch 2, seed 0, backbone frozen,
+  validation pool 40 images / 79 boxes (seed 1161), fresh pool 200 images / 399 boxes, grid complete with
+  no problems, device class `cuda-t4`.
+- The report and results JSON stayed on the released VM. The `preregistered` boolean and
+  `settings_differing` are therefore shown only through that label, not as committed files.
+
+**Baseline (re-headed, before fine-tuning).** The six `head.cls_preds.{0,1,2}.{weight,bias}` tensors
+could not transfer from the COCO checkpoint, so the baseline's classification head is untrained. A large
+gain was therefore expected (review F8). The informative parts are the size of the gain, the width of
+the interval, and that it held on images no choice was made on.
+- Validation: AP 0.1767, AP50 0.1851; per-class AP50 stop 0.0554, yield 0.0, speed-limit 0.5.
+- Exposed development test: AP 0.2083, AP50 0.2222; per-class AP50 0.0 / 0.0 / 0.6667. This equals
+  every earlier record.
+
+**Grid (validation; this chose the configuration).**
+
+| Config | Validation AP@[.50:.95] | AP50 | Gain over C0 | Final `total_loss` | Fine-tune s (T4) | CPU masked check AP (`825771a`) | T4 − CPU |
+|---|---|---|---|---|---|---|---|
+| C0 6 ep, 1e-3 | 0.6966 | 1.0 | — | 1.87603 | 6.4 | 0.7760 | −0.0794 |
+| C1 10 ep, 1e-3 | **0.8554** | 1.0 | +0.1587 | 1.38442 | 7.4 | 0.8871 | −0.0317 |
+| C2 8 ep, 2e-3 | 0.7122 | 1.0 | +0.0155 | 2.60175 | 6.0 | 0.8285 | −0.1163 |
+
+- **Selection, re-applied by hand.** C1 gains 0.1587 ≥ 0.03 with AP50 equal, so it qualifies. C2
+  gains 0.0155 < 0.03, so it does not. C1 is selected, which matches the printed reason. Keep-baseline:
+  C1 − baseline = 0.6787 at printed precision (printed 0.6786 from unrounded values) ≥ 0.03, so the
+  adapted C1 is the selected system.
+- AP50 is 1.0 for every config, so each class's AP50 is 1.0. The AP50 guard decided nothing.
+- The grid's fine-tuning totalled 19.8 s against the pre-registration's planning estimate of about
+  24 s. The whole run took 134.6 s wall.
+- C2's loss rose in its last two epochs (1.8718 → 2.0892 → 2.6018). Its CPU run kept falling
+  (→ 1.7545).
+
+**Against the CPU masked check.** The CPU check also selected C1, so the decision is unchanged. Every
+number differs.
+- T4 validation AP is lower for all three configs: by 0.079 (C0), 0.032 (C1) and 0.116 (C2).
+- On CPU, C2 also qualified (+0.0525) but lost to C1's larger gain. On the T4 it does not qualify.
+- The C1 margin over C0 is 0.1587 on the T4 against 0.1112 on CPU. Keep-baseline is 0.6787 against
+  0.7104.
+- Only 2 of 24 epoch loss lines are identical (C0 and C1 epoch 1). C2 epoch 1 differs in the 4th
+  decimal.
+- The exposed development test for C1 is 0.8516 on the T4 against 0.9050 on CPU (AP50 1.0 both).
+- Fine-tuning took 19.8 s on the T4 against 194.4 s on CPU.
+- The CPU check ran an earlier code revision (`825771a`) than this run (`b242f44`, round-2 code
+  `51f7e72`). So the T4 − CPU gaps mix device effects with code changes.
+- The round-2 erratum (|CPU − T4| ≤ 0.034 for C0 on the exposed test) does not carry over to
+  validation: here C0 differs by 0.079 and C2 by 0.116. The pre-registration's "about 0.1 AP" is
+  closer for this pool. Neither changes the rule.
+
+**Fresh test (primary endpoint; 200 images, 399 boxes).**
+
+| System | AP@[.50:.95] | AP50 | Per-class AP50 (stop / yield / speed-limit) |
+|---|---|---|---|
+| Selected (C1) | **0.8573** | 1.0 | 1.0 / 1.0 / 1.0 |
+| Pretrained baseline (re-headed) | 0.1363 | 0.1449 | 0.013 / 0.0 / 0.4217 |
+
+- Difference +0.7211; paired image bootstrap 95 % CI [0.6983, 0.7435] (n_boot 10 000, seed 20261018,
+  as pre-registered).
+- Verdict **improved**: the lower bound 0.6983 is > 0 and the gain is ≥ 0.03.
+- Re-derived from the printed values: 0.8573 − 0.1363 = 0.7210 (printed 0.7211, from unrounded
+  values).
+- Observed CI half-width: 0.0226. This replaces the pre-registration's planning estimate of ±0.07 AP.
+  The minimum detectable change (planned about 0.10) is far below the observed gain.
+- The bootstrap was not re-run, because the per-image detections stayed on the VM.
+- The fresh test measures in-distribution generalisation (same renderer, same shapes). It is not a
+  detection benchmark.
+
+**Exposed development test (descriptive only; decides nothing).** Baseline AP 0.2083 / AP50 0.2222;
+C1 AP 0.8516 / AP50 1.0000 (+0.6432 / +0.7778).
+
+**Other printed checks.**
+- COCO scene: 4/5 matched (IoU 0.946 / 0.914 / 0.946 / 0.000 / 0.959). RGB order: 5 detections,
+  stop sign 0.839. Blank and noise: 0 boxes at the demo thresholds.
+- New-data seed 99 with C1: 5/5 objects correctly labelled, same-label IoU 0.881–0.942.
+- Artifact: 36,000,287 bytes, 462 tensors, SHA-256 `eef542e6…`. The fresh reload reproduced
+  validation AP 0.8554 / AP50 1.0, and the tampered artifact was refused.
+- BYOD branches off.
+
+**Evidence** (`docs/execution-evidence/2026-10-18-ad795d2/`, `-text`). SHA-256 values were checked
+end to end: the VM run directory, the local copy, and the committed blob.
+- Executed notebook: `d997ac73b1e6c8e42f95a7d7c130865f3a5f6909decbeb7c0143f5d32cc5f7b3`.
+- `run_summary.json`: `e98d4245f3052ae0775b887b8ff35eac0584259373ea1762dc74f5cb6ac5a3aa`.
+- `exec.log`: in lines 1 and 253, the operator's home-directory run path was replaced with
+  `<local-run-dir>/`.
+  - Captured SHA-256: `c8aacc7a67672603f5741704f6cdae30b1e572c065855ccc6a482df05844a876`.
+  - Committed SHA-256: `345229e6fb37ca992e082f7270e5b251a90737ad1bc780e22b34598faa2665b7`.
+  - `run_summary.json` does not record the log's hash.

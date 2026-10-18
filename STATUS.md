@@ -13,6 +13,8 @@ That run is workflow history, not one-pass clean-runtime evidence, so gate 6 is 
 review fixes regenerated the notebook with an isolated `uv` environment that needs no restart; the regenerated
 blob `fe56cb6950f3` (commit `2c3d8bc`) completed one pass with no restart and 0 errors on a fresh Colab Tesla T4 on 2026-10-10 (Colab CLI 0.7.4 sequential execution, 24/24 code cells, 103.3 s; baseline AP 0.2083 / AP50 0.2222 → adapted AP 0.7766 / AP50 1.0; fresh reload identical). Status stays Candidate until a reviewer/integrator accepts that record; the REL12 BYOD journey is not recorded.
 
+The pre-registered **evaluation of record** ran on 2026-10-18: blob `5fe2ef5d4628` (commit `ad795d2`) on a fresh Colab Tesla T4 (Colab CLI 0.7.4 sequential execution, 25/25 code cells, 0 errors, 134.6 s). The validation grid selected C1 (10 epochs at 1e-3; validation AP C0 0.6966 / C1 0.8554 / C2 0.7122). On the 200-image fresh test, C1 scored AP@[.50:.95] 0.8573 against the re-headed baseline's 0.1363: +0.7211, 95 % CI [0.6983, 0.7435], verdict *improved*. The baseline's classification head is untrained, so a large gain was expected. The fresh test is drawn by the same generator, so it measures in-distribution generalisation, not detection on real images. See "Hosted T4 evaluation of record (2026-10-18)" in [`docs/release-verification.md`](docs/release-verification.md). Status stays **Candidate**.
+
 That local execution is **pre-flight evidence, not clean-runtime evidence**. A green CI run is static
 and unit validation only; neither it nor a local kernel run establishes that the notebook completes in
 a supported hosted runtime from a cold start. Promotion to **Release-grade** requires a clean-room
