@@ -194,10 +194,27 @@ def test_every_fixed_setting_is_in_the_preregistered_check() -> None:
     assert protocol.preregistration_differences({}) == list(protocol.PREREGISTERED_SETTINGS)
 
 
-def test_recorded_evaluation_is_the_hosted_t4_record() -> None:
-    """The 2026-10-18 Colab CLI T4 run (docs/execution-evidence/2026-10-18-ad795d2/), values as Section 9 printed them."""
+def test_recorded_evaluation_is_the_amendment_2_hosted_t4_record() -> None:
+    """The 2026-10-18 Colab CLI T4 run of 4429e0e (docs/execution-evidence/2026-10-18-4429e0e/), as Sections 8 and 9 printed it."""
+    record = protocol.RECORDED_EVALUATION
+    assert record is not None and record is not protocol.ROUND2_RECORDED_EVALUATION
+    assert record["fresh_pool"] == protocol.FRESH_TEST_POOL == {"n": 200, "seed": 1162}
+    assert record["date"] == "2026-10-18" and record["device_class"] == "cuda-t4"
+    assert record["commit"] == "4429e0e50372f14355fb23d801a754a57e3b364e"
+    assert record["notebook_blob"] == "a9dd3990a1d8b18be6fbcc06ee218c19e0025b7c"
+    assert record["selected_config"] == record["selected_system"] == "C1"
+    assert record["validation_ap"] == {"baseline": 0.1767, "C0": 0.7037, "C1": 0.8937, "C2": 0.8296}
+    assert record["grid_hash"] == "184785885a816d4becfec2789c796d112be29dbe5f5b4760f2ab7fdb39753793"
+    assert record["fresh_test"] == {
+        "n_images": 200, "n_references": 386, "selected_ap": 0.8933, "baseline_ap": 0.1317,
+        "ap_difference": 0.7616, "ci95": [0.7381, 0.782], "verdict": "improved",
+    }
+    assert (ROOT / record["evidence"]).is_dir()
+
+
+def test_round2_record_is_unchanged_history() -> None:
+    """The round-2 Colab CLI T4 run (docs/execution-evidence/2026-10-18-ad795d2/), values as Section 9 printed them."""
     record = protocol.ROUND2_RECORDED_EVALUATION
-    assert protocol.RECORDED_EVALUATION is None  # amendment 2: no record on fresh test 3 yet
     assert record["fresh_pool"] == protocol.EXPOSED_ROUND2_POOL == {"n": 200, "seed": 1160}
     assert record is not None and record["date"] == "2026-10-18" and record["device_class"] == "cuda-t4"
     assert record["commit"].startswith("ad795d2") and record["notebook_blob"].startswith("5fe2ef5d")
@@ -217,8 +234,9 @@ def test_cpu_default_grid_off_trains_the_recorded_selection_and_is_exploratory(h
     report = _report(tmp, "_exploratory_1")
     assert report["fresh_test"] is None and "run_grid" in report["settings_differing"]
     assert report["test_look"] == protocol.TEST_LOOK_EXPLORATORY and report["preregistered"] is False
-    # The recorded selection follows the hosted record (ad795d2 selected C1): ten epochs at 1e-3.
+    # The recorded selection follows the amendment-2 record (4429e0e selected C1, as ad795d2 did): ten epochs at 1e-3.
     assert list(ns["grid_rows"]) == [protocol.RECORDED_SELECTION] == ["C1"]
+    assert protocol.RECORDED_EVALUATION["selected_config"] == protocol.RECORDED_SELECTION
     assert protocol.ROUND2_RECORDED_EVALUATION["selected_config"] == protocol.RECORDED_SELECTION
     assert ns["grid_rows"]["C1"]["settings"]["epochs"] == 10 and ns["grid_rows"]["C1"]["settings"]["learning_rate"] == 1e-3
 
@@ -524,18 +542,19 @@ def test_device_class_helper() -> None:
 
 def test_with_the_record_the_first_run_in_a_new_runtime_is_a_reproduction_and_never_writes_the_main_files(harness, capsys) -> None:
     run, ns, tmp = harness
-    ns["RECORDED_EVALUATION"] = protocol.ROUND2_RECORDED_EVALUATION
+    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION  # the module value: the amendment-2 record
     run()
     assert not (tmp / f"{STEM}_evaluation_report.json").exists()
     assert not (tmp / f"{STEM}_fresh_test_per_image.json").exists()
     first = _report(tmp, "_reproduction_1")
     assert first["test_look"] == protocol.TEST_LOOK_REPRODUCTION == "reproduction" and first["preregistered"] is True
-    assert first["fresh_test"] is not None and first["recorded_evaluation"] == protocol.ROUND2_RECORDED_EVALUATION
+    assert first["fresh_test"] is not None and first["recorded_evaluation"] == protocol.RECORDED_EVALUATION
+    assert first["fresh_test_pool"] == {"n": 200, "seed": 1162}
     comparison = first["record_comparison"]
-    assert comparison["record"]["commit"].startswith("ad795d2") and comparison["matches"] is False
+    assert comparison["record"]["commit"].startswith("4429e0e") and comparison["matches"] is False
     assert "selected_ap" in comparison["differing"]  # the stand-in detector is not the record
     out = capsys.readouterr().out
-    assert "reproduction of the pre-registered evaluation of 2026-10-18 (commit ad795d2): differs from the record in" in out
+    assert "reproduction of the pre-registered evaluation of 2026-10-18 (commit 4429e0e): differs from the record in" in out
     assert (tmp / f"{STEM}_fresh_test_per_image_reproduction_1.json").is_file()
     run(sections=(9,))
     assert _report(tmp, "_reproduction_2")["test_look"] == "reproduction"
@@ -544,7 +563,7 @@ def test_with_the_record_the_first_run_in_a_new_runtime_is_a_reproduction_and_ne
 
 def test_with_the_record_a_changed_setting_is_still_exploratory(harness) -> None:
     run, ns, tmp = harness
-    ns["RECORDED_EVALUATION"] = protocol.ROUND2_RECORDED_EVALUATION
+    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION
     run(**{"BATCH_SIZE = 2": "BATCH_SIZE = 1"})
     report = _report(tmp, "_exploratory_1")
     assert report["test_look"] == protocol.TEST_LOOK_EXPLORATORY and report["fresh_test"] is None
@@ -572,6 +591,14 @@ def test_compare_with_record_reports_a_match_and_each_differing_field() -> None:
     other = protocol.compare_with_record(record, dict(fresh, selected={"ap": 0.85}), {"selected_config": "C0", "selected_system": "C0"})
     assert other["matches"] is False and other["differing"] == ["selected_config", "selected_system", "selected_ap"]
     assert protocol.compare_with_record(None, fresh, selection) is None
+    # The amendment-2 record: a run that prints its numbers (to 4 decimals) matches it.
+    fresh3 = {
+        "selected": {"ap": 0.89331}, "baseline": {"ap": 0.13168}, "verdict": "improved",
+        "bootstrap": {"primary_ap_difference": 0.76163, "primary_ap_ci95": [0.73812, 0.78198]},
+    }
+    match3 = protocol.compare_with_record(protocol.RECORDED_EVALUATION, fresh3, selection)
+    assert match3["matches"] is True and match3["record"]["commit"].startswith("4429e0e")
+    assert protocol.compare_with_record(protocol.RECORDED_EVALUATION, fresh, selection)["matches"] is False
     assert protocol.compare_with_record(record, None, selection) is None
 
 
@@ -649,7 +676,7 @@ def test_masked_determinism_check_prints_the_hash_and_never_generates_fresh_test
 
 def test_the_first_fresh_test_3_scoring_is_the_preregistered_evaluation(harness) -> None:
     run, ns, tmp = harness
-    ns["RECORDED_EVALUATION"] = protocol.RECORDED_EVALUATION  # the module value: None under amendment 2
+    ns["RECORDED_EVALUATION"] = None  # the record-less state the amendment-2 record (4429e0e) itself ran in
     run()
     report = _report(tmp)
     assert report["test_look"] == protocol.TEST_LOOK_PREREGISTERED and report["fresh_test_pool"] == {"n": 200, "seed": 1162}

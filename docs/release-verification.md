@@ -512,6 +512,12 @@ CPU run keeps training the round-2 selection C1. Recording the amendment-2 recor
 regenerates the notebook; until then a later identical hosted run labels itself "pre-registered evaluation
 (this runtime)", and this file is what says it is a reproduction.)
 
+**Note (2026-10-18, requote r3):** `RECORDED_EVALUATION` in `protocol.py` now carries this record (date,
+commit `4429e0e`, notebook blob `a9dd3990`, selection C1, validation AP, grid hash and the fresh-test-3
+numbers), so a later pre-registered scoring of fresh test 3 labels itself `reproduction`, including the first
+one in a new runtime, writes `_reproduction_<n>` files and prints whether it matches the record.
+`RECORDED_SELECTION` stays C1. The notebook was regenerated; no model was run and nothing was scored.
+
 ## Masked determinism check (amendment 2, 2026-10-18)
 
 **REL13 label for this section:**

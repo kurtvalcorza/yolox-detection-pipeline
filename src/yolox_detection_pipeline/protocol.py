@@ -50,8 +50,8 @@ GRID: tuple[dict[str, Any], ...] = (
     {"name": "C2", "epochs": 8, "learning_rate": 2e-3},
 )
 DEFAULT_CONFIG = "C0"
-# What a grid-off (CPU) run trains: the round-2 record's selection (C1, ad795d2), kept until the amendment-2 record
-# exists (amendment 2, B3). A grid-off run is exploratory either way.
+# What a grid-off (CPU) run trains: the selection of the amendment-2 evaluation of record (C1; hosted T4, 4429e0e),
+# the same choice as the round-2 record (ad795d2). A grid-off run is exploratory either way.
 RECORDED_SELECTION = "C1"
 TIE_ORDER = ("C0", "C2", "C1")  # exact ties go to the smaller config (fewer epochs)
 TIE_TOLERANCE = 1e-9
@@ -94,8 +94,8 @@ PREREGISTERED_SETTINGS: dict[str, Any] = {
     "determinism": None,  # filled below from DETERMINISM_EXPECTED
 }
 
-# The hosted T4 run that is the evaluation of record (docs/release-verification.md, "Hosted T4 evaluation of record
-# (2026-10-18)"); values as printed by Section 9 of that run (4 decimals). Later identical runs are reproductions.
+# Round 2's hosted T4 evaluation of record on fresh test 2, kept as history (docs/release-verification.md, "Hosted T4
+# evaluation of record (2026-10-18)"); values as printed by Section 9 of that run (4 decimals).
 ROUND2_RECORDED_EVALUATION: dict[str, Any] = {
     "label": "pre-registered evaluation of record",
     "date": "2026-10-18",
@@ -119,9 +119,34 @@ ROUND2_RECORDED_EVALUATION: dict[str, Any] = {
     "fresh_pool": dict(EXPOSED_ROUND2_POOL),
     "status": "history: the round-2 record on fresh test 2 (amendment 2 made that pool an exposed test)",
 }
-# Amendment 2 (B3): the evaluation of record on fresh test 3. None until the first hosted T4 run under amendment 2
-# scores it, so that run is labelled "pre-registered evaluation (this runtime)".
-RECORDED_EVALUATION: dict[str, Any] | None = None
+# Amendment 2 (B3): the evaluation of record on fresh test 3, the first hosted T4 run under amendment 2 that scored it
+# (docs/release-verification.md, "Amendment-2 evaluation of record: hosted T4 (2026-10-18, commit 4429e0e)"); values
+# as Sections 8 and 9 of that run printed them (4 decimals). Its grid hash matched the two masked runs. Every
+# pre-registered scoring of fresh test 3 is now a reproduction, including the first one in a new runtime.
+RECORDED_EVALUATION: dict[str, Any] | None = {
+    "label": "pre-registered evaluation of record",
+    "date": "2026-10-18",
+    "runner": "Colab CLI, fresh hosted T4 session",
+    "device_class": "cuda-t4",
+    "commit": "4429e0e50372f14355fb23d801a754a57e3b364e",
+    "notebook_blob": "a9dd3990a1d8b18be6fbcc06ee218c19e0025b7c",
+    "evidence": "docs/execution-evidence/2026-10-18-4429e0e/",
+    "selected_config": "C1",
+    "selected_system": "C1",
+    "validation_ap": {"baseline": 0.1767, "C0": 0.7037, "C1": 0.8937, "C2": 0.8296},
+    "grid_hash": "184785885a816d4becfec2789c796d112be29dbe5f5b4760f2ab7fdb39753793",
+    "fresh_test": {
+        "n_images": 200,
+        "n_references": 386,
+        "selected_ap": 0.8933,
+        "baseline_ap": 0.1317,
+        "ap_difference": 0.7616,
+        "ci95": [0.7381, 0.782],
+        "verdict": "improved",
+    },
+    "fresh_pool": dict(FRESH_TEST_POOL),
+    "status": "the evaluation of record on fresh test 3 (amendment 2)",
+}
 
 # ---- amendment 2 (B1): determinism -------------------------------------------------------------------------------
 # cuBLAS reads this when its first handle is created, so it is set when this module is imported (Section 2), before

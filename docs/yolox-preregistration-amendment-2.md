@@ -66,3 +66,17 @@ verdicts) and amendment 1 (only a T4 counts, the gate recomputes, the spent-slot
    `RECORDED_EVALUATION` for amendment 2 is None until it exists.
 3. A grid-off CPU run keeps training the round-2 selection C1 (`RECORDED_SELECTION`) until the amendment-2
    record exists. CPU runs stay exploratory.
+
+## Note after the evaluation of record (dated; the text above is unchanged)
+
+**2026-10-18.** The amendment-2 evaluation of record exists: the hosted T4 run of commit `4429e0e`
+(notebook blob `a9dd3990`; evidence `docs/execution-evidence/2026-10-18-4429e0e/`; see
+`docs/release-verification.md`). The masked determinism check passed first, and the record printed the same
+grid hash (`184785885a81…`) as the two masked runs.
+- B3.2: `RECORDED_EVALUATION` in `protocol.py` now carries this record. Every later pre-registered scoring
+  of fresh test 3, including the first one in a new runtime, is labelled `reproduction`, is written to
+  `_reproduction_<n>` files and prints whether it matches the record.
+- B3.3: the record selected C1, as the round-2 record did, so `RECORDED_SELECTION` stays C1 and now cites
+  this record. CPU runs stay exploratory.
+- CI width: the pre-registration planned a half-width of about ±0.07 AP. On fresh test 3 the observed 95 %
+  interval was [0.7381, 0.782] around a difference of +0.7616, a half-width of 0.022.
