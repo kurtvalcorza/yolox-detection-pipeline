@@ -668,3 +668,18 @@ line and the results-file size (27,763 → 27,750 bytes, the shorter label). Eve
 
 `compare_with_record` checks the selection and the fresh-test fields only; the grid hash and loss curves were
 compared from the logs. Determinism therefore held on a fourth T4 VM. Status stays **Candidate**.
+
+## Safetensors artifact export (2026-10-23) — hosted run pending
+
+Code commit `b6082b9` changes the exported adapter from one `torch.save` pickle (`yolox-detection-adapter.pt`, format
+`dimer-yolox-detection-adapter/1`) to format `/2`: the state dict as `yolox-detection-adapter.safetensors` (written with
+`safetensors.torch.save_file`, no pickle) and a plain-JSON sidecar `yolox-detection-adapter.json` holding the metadata and
+the SHA-256 of the weights file. `load_artifact` checks the sidecar's format, identity, model key and that
+SHA-256 before it opens the weights, then applies them with `load_state_dict(strict=True)`; `.pt` artifacts
+are refused. Section 11's tamper check now flips one weight byte and edits the sidecar's format tag, and both
+are refused. `safetensors==0.8.0` joins the pins and the hash lock.
+
+The regenerated notebook `yolox_detection_finetune_colab.ipynb` is blob `4f0199a59dcbec7b9292824b5846861d168a486e`. **REL14:** every row under
+"Recorded executions" ran an earlier blob; those rows, and the artifact sizes and digests quoted above, are
+history for the `.pt` export and are not evidence for this blob. A hosted T4 run of this blob is pending and
+will be recorded here. Unit tests, the validator and the parity check pass on CPU; that is static evidence only.
