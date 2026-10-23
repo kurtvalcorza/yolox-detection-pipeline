@@ -35,7 +35,7 @@ behind a default-off flag:
 9. Re-check every pre-registered setting, then score a 200-image fresh test against the baseline with a paired
    image bootstrap; the 10-image exposed development test is shown for continuity and decides nothing.
 10. Detect on images from an unseen seed.
-11. Export the artifact, reload it from disk, and assert the reloaded model scores identically.
+11. Export the artifact (`yolox-detection-adapter.safetensors` state dict plus a `yolox-detection-adapter.json` sidecar with its SHA-256; no pickle), reload it from disk, and assert the reloaded model scores identically.
 12. Write every result as JSON with provenance.
 13. Optional BYOD: your own image, or your own labelled dataset through the same local stages.
 
