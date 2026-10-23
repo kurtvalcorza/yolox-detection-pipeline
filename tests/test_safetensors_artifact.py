@@ -246,7 +246,7 @@ def test_weights_file_is_exactly_a_header_and_tensor_data_with_no_pickle(exporte
         ("model_revision", "0.0.0", "package pins"),
     ],
 )
-def test_wrong_format_or_identity_in_the_sidecar_is_refused(exported, tmp_path, field, value, message) -> None:
+def test_wrong_format_or_identity_in_the_sidecar_is_refused(exported, tmp_path, field, value, message):
     out, _ = exported
     weights = _copy_artifact(out, tmp_path)
     sidecar = weights.with_suffix(".json")
