@@ -1,0 +1,260 @@
+[colab] Parsing notebook '<local-run-dir>/yolox_detection_finetune_colab_1792c3f_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/25 - Infrastructure: install the locked runtime into an isolated environment...
+{'isolated_environment': '/content/dimer_isolated_env', 'isolated_python': '3.12.12', 'kernel_python': '3.13.15', 'locked_packages': 33, 'setup_seconds': 61}
+[colab] Executing cell 2/25 - Route the remaining cells to the isolated environment...
+Every later code cell now runs in /content/dimer_isolated_env/bin/python (pid 894).
+[colab] Executing cell 3/25 - Infrastructure: record the pinned runtime and the notebook source...
+{'notebook_source': {'repository': 'yolox-detection-pipeline', 'repository_revision': 'b6082b9b3385de74b17722c3137286675f2321bd', 'embedded_module': 'src/yolox_detection_pipeline/pipeline.py', 'embedded_modules': ['src/yolox_detection_pipeline/coco_classes.py', 'src/yolox_detection_pipeline/losses.py', 'src/yolox_detection_pipeline/network_blocks.py', 'src/yolox_detection_pipeline/ops.py', 'src/yolox_detection_pipeline/samples.py', 'src/yolox_detection_pipeline/darknet.py', 'src/yolox_detection_pipeline/pipeline.py', 'src/yolox_detection_pipeline/yolo_head.py', 'src/yolox_detection_pipeline/protocol.py', 'src/yolox_detection_pipeline/yolo_pafpn.py', 'src/yolox_detection_pipeline/yolox.py'], 'module_sha256': '2148bba8f961595f76177821aee1895a2c69b23deb02622b4de39c8df57b4fa9', 'generator': 'build_notebook.py/2.2-swc-yolox', 'notebook_spec': '2.5'}, 'python': '3.12.12', 'torch': '2.14.0+cu130', 'torchvision': '0.29.0+cu130', 'numpy': '2.5.3', 'cuda': True}
+[colab] Executing cell 4/25 - yolox_detection-12...
+[colab] Executing cell 5/25 - yolox_detection-14...
+[colab] Executing cell 6/25 - yolox_detection-16...
+[colab] Executing cell 7/25 - yolox_detection-18...
+[colab] Executing cell 8/25 - yolox_detection-20...
+[colab] Executing cell 9/25 - yolox_detection-22...
+[colab] Executing cell 10/25 - yolox_detection-24...
+[colab] Executing cell 11/25 - yolox_detection-26...
+[colab] Executing cell 12/25 - yolox_detection-28...
+[colab] Executing cell 13/25 - yolox_detection-30...
+[colab] Executing cell 14/25 - yolox_detection-32...
+[colab] Executing cell 15/25 - Infrastructure: pin, stage and verify the model...
+{'model_id': 'Megvii-BaseDetection/YOLOX', 'revision': '0.1.1rc0', 'license': 'apache-2.0', 'files': 1, 'total_bytes': 72089125}
+{'weights_dir': '/content/weights/yolox-s', 'fetched': ['yolox_s.pth']}
+{'verified_files': 1, 'revision': '0.1.1rc0'}
+{'device': 'cuda:0', 'source': 'local-snapshot'}
+[colab] Executing cell 16/25 - yolox_detection-36...
+{'sample_kind': 'synthetic', 'size': [640, 640], 'sha256': '173d4d5e8473ad4f', 'references': {'stop sign': 1, 'traffic light': 1, 'clock': 1, 'sports ball': 1, 'bench': 1}}
+{'verdict': 'accepted', 'findings': [], 'inputs': [{'id': 'tutorial-scene', 'mode': 'RGB', 'size': [640, 640]}]}
+     stop sign 0.962  [53, 134, 187, 266]
+ traffic light 0.863  [300, 120, 359, 254]
+         clock 0.855  [458, 130, 602, 274]
+         bench 0.545  [439, 500, 612, 582]
+          kite 0.369  [241, 519, 321, 600]
+         clock 0.309  [240, 519, 321, 600]
+{'verdict': 'sample-sanity', 'n_detections': 6}
+         stop sign-0  box_iou 0.946  same-label detections 1
+     traffic light-0  box_iou 0.914  same-label detections 1
+             clock-0  box_iou 0.946  same-label detections 2
+       sports ball-0  box_iou 0.000  same-label detections 0
+             bench-0  box_iou 0.959  same-label detections 1
+4/5 drawn objects matched at IoU >= 0.5
+<PIL.Image.Image image mode=RGB size=640x640 at 0x7AE048250500>
+
+[Image saved to: /tmp/tmpoz7p_yfb.png]
+[colab] Executing cell 17/25 - yolox_detection-38...
+BGR (upstream order): [('stop sign', 0.962), ('traffic light', 0.863), ('clock', 0.855), ('bench', 0.545), ('kite', 0.369), ('clock', 0.309)]
+RGB (the mistake)   : [('clock', 0.873), ('traffic light', 0.869), ('stop sign', 0.839), ('clock', 0.441), ('kite', 0.339)]
+{
+  "blank": {
+    "at_demo_thresholds": 0,
+    "at_evaluation_thresholds": 0,
+    "top": []
+  },
+  "noise": {
+    "at_demo_thresholds": 0,
+    "at_evaluation_thresholds": 1,
+    "top": [
+      [
+        "bear",
+        0.073
+      ]
+    ]
+  }
+}
+[colab] Executing cell 18/25 - yolox_detection-40...
+{
+  "class_names": [
+    "stop-sign",
+    "yield-sign",
+    "speed-limit-sign"
+  ],
+  "n_images": 40,
+  "n_boxes": 82,
+  "boxes_per_class": {
+    "stop-sign": 21,
+    "yield-sign": 34,
+    "speed-limit-sign": 27
+  },
+  "epochs": 10,
+  "verdict": "accepted",
+  "findings": [],
+  "model_id": "Megvii-BaseDetection/YOLOX",
+  "model_revision": "0.1.1rc0"
+}
+
+record shape expected by finetune: a mapping with 'image' (PIL.Image.Image), 'boxes' (list of xyxy pixel boxes in that image's own coordinates) and 'labels' (list of class names, one per box, drawn from class_names)
+COCO classes the pretrained model knows : ['stop sign', 'clock']
+adaptation vocabulary (not COCO)        : ['stop-sign', 'yield-sign', 'speed-limit-sign']
+{'validation_images': 40, 'validation_boxes': 79, 'validation_seed': 1161}
+
+first six images, and the labels of the first: ['yield-sign']
+<PIL.Image.Image image mode=RGB size=480x320 at 0x7AE048337170>
+
+[Image saved to: /tmp/tmpg5wos5yx.png]
+[colab] Executing cell 19/25 - yolox_detection-42...
+{'train': 30, 'exposed_dev_test': 10, 'validation': 40, 'train_boxes': 61, 'exposed_dev_test_boxes': 21}
+{'class_names': ['stop-sign', 'yield-sign', 'speed-limit-sign'], 'device': 'cuda:0', 'adapted': False}
+tensors that could not transfer from the COCO checkpoint:
+    head.cls_preds.0.bias
+    head.cls_preds.0.weight
+    head.cls_preds.1.bias
+    head.cls_preds.1.weight
+    head.cls_preds.2.bias
+    head.cls_preds.2.weight
+{
+  "validation (chooses the configuration)": {
+    "ap": 0.1767,
+    "ap50": 0.1851,
+    "per_class_ap50": {
+      "stop-sign": 0.0554,
+      "yield-sign": 0.0,
+      "speed-limit-sign": 0.5
+    },
+    "n_images": 40,
+    "n_references": 79
+  },
+  "exposed development test (descriptive only)": {
+    "ap": 0.2083,
+    "ap50": 0.2222,
+    "per_class_ap50": {
+      "stop-sign": 0.0,
+      "yield-sign": 0.0,
+      "speed-limit-sign": 0.6667
+    },
+    "n_images": 10,
+    "n_references": 21
+  }
+}
+[colab] Executing cell 20/25 - yolox_detection-44...
+determinism: {'cublas_workspace_config': ':4096:8', 'cudnn_deterministic': True, 'cudnn_benchmark': False, 'deterministic_algorithms': True, 'warn_only': False}
+device Tesla T4 (cuda-t4); grid ON: training ['C0', 'C1', 'C2']
+<isolated cell 9>:488: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(enabled=False):
+C0 epoch 1/6  total 6.2880  iou 1.6569  conf 2.5065  cls 2.1246  l1 0.0000  num_fg 8.21
+C0 epoch 2/6  total 3.7558  iou 1.7774  conf 1.1950  cls 0.7834  l1 0.0000  num_fg 7.87
+C0 epoch 3/6  total 2.8003  iou 1.4016  conf 0.7617  cls 0.6370  l1 0.0000  num_fg 8.08
+C0 epoch 4/6  total 2.2819  iou 1.2208  conf 0.5867  cls 0.4744  l1 0.0000  num_fg 8.36
+C0 epoch 5/6  total 2.0537  iou 1.0966  conf 0.5286  cls 0.4285  l1 0.0000  num_fg 8.46
+C0 epoch 6/6  total 1.7234  iou 0.9238  conf 0.4503  cls 0.3493  l1 0.0000  num_fg 8.76
+{'name': 'C0', 'status': 'complete', 'val_ap': 0.7037040193718931, 'val_ap50': 1.0, 'final_total_loss': 1.72345, 'finetune_seconds': 6.8, 'error': None}
+C1 epoch 1/10  total 6.2880  iou 1.6569  conf 2.5065  cls 2.1246  l1 0.0000  num_fg 8.21
+C1 epoch 2/10  total 3.7558  iou 1.7774  conf 1.1950  cls 0.7834  l1 0.0000  num_fg 7.87
+C1 epoch 3/10  total 2.8003  iou 1.4016  conf 0.7617  cls 0.6370  l1 0.0000  num_fg 8.08
+C1 epoch 4/10  total 2.2819  iou 1.2208  conf 0.5867  cls 0.4744  l1 0.0000  num_fg 8.36
+C1 epoch 5/10  total 2.0537  iou 1.0966  conf 0.5286  cls 0.4285  l1 0.0000  num_fg 8.46
+C1 epoch 6/10  total 1.7234  iou 0.9238  conf 0.4503  cls 0.3493  l1 0.0000  num_fg 8.76
+C1 epoch 7/10  total 1.9235  iou 1.1094  conf 0.4051  cls 0.4090  l1 0.0000  num_fg 8.44
+C1 epoch 8/10  total 1.6673  iou 0.8950  conf 0.4403  cls 0.3320  l1 0.0000  num_fg 8.73
+C1 epoch 9/10  total 1.5563  iou 0.8571  conf 0.3759  cls 0.3234  l1 0.0000  num_fg 8.87
+C1 epoch 10/10  total 1.5216  iou 0.8540  conf 0.3503  cls 0.3173  l1 0.0000  num_fg 8.82
+{'name': 'C1', 'status': 'complete', 'val_ap': 0.8937458271675158, 'val_ap50': 1.0, 'final_total_loss': 1.5216, 'finetune_seconds': 8.1, 'error': None}
+C2 epoch 1/8  total 7.6928  iou 2.0564  conf 2.5564  cls 3.0801  l1 0.0000  num_fg 7.58
+C2 epoch 2/8  total 4.5227  iou 2.0731  conf 1.3411  cls 1.1085  l1 0.0000  num_fg 7.27
+C2 epoch 3/8  total 3.2599  iou 1.7077  conf 0.9101  cls 0.6421  l1 0.0000  num_fg 7.56
+C2 epoch 4/8  total 3.2033  iou 1.6811  conf 0.8784  cls 0.6439  l1 0.0000  num_fg 7.75
+C2 epoch 5/8  total 2.3578  iou 1.2288  conf 0.6629  cls 0.4661  l1 0.0000  num_fg 8.02
+C2 epoch 6/8  total 2.2845  iou 1.2774  conf 0.5520  cls 0.4551  l1 0.0000  num_fg 8.08
+C2 epoch 7/8  total 1.8787  iou 1.0071  conf 0.4782  cls 0.3934  l1 0.0000  num_fg 8.44
+C2 epoch 8/8  total 1.6945  iou 0.8995  conf 0.4358  cls 0.3592  l1 0.0000  num_fg 8.73
+{'name': 'C2', 'status': 'complete', 'val_ap': 0.8296297020369339, 'val_ap50': 1.0, 'final_total_loss': 1.69447, 'finetune_seconds': 6.7, 'error': None}
+grid hash 184785885a816d4becfec2789c796d112be29dbe5f5b4760f2ab7fdb39753793  (two deterministic runs print the same hash)
+{
+  "grid_complete": true,
+  "problems": [],
+  "selected_config": "C1",
+  "selected_system": "C1",
+  "reason": "C1 beat C0 by 0.1900 validation AP (margin 0.03) with AP50 at most 0.02 lower",
+  "keep_baseline_rule": "C1 beats the pretrained baseline by 0.7170 validation AP (>= 0.03): the adapted model is the selected system"
+}
+{
+  "optimizer": "SGD(momentum=0.9, weight_decay=5e-4)",
+  "loss": "upstream YOLOXHead SimOTA (IoU + objectness + classification)",
+  "use_l1": false,
+  "freeze_backbone": true,
+  "trainable_parameters": 1891096,
+  "total_parameters": 8938456,
+  "epochs": 10,
+  "batch_size": 2,
+  "learning_rate": 0.001,
+  "seed": 0
+}
+C1: total_loss 6.2880 -> 1.5216 over 10 epochs in 8.1 s
+[colab] Executing cell 21/25 - yolox_detection-46...
+validation AP@[.50:.95]: baseline 0.1767, C1 0.8937 -> selected system: C1
+
+exposed development test (10 images, scored by the September 2026 grid; descriptive only, decides nothing):
+metric       baseline    adapted     change
+ap             0.2083     0.9043    +0.6960
+ap50           0.2222     1.0000    +0.7778
+implementation note: package-local average_precision: COCO matching and 101-point interpolation, tied scores as one operating point, without pycocotools' area ranges or crowd handling — not comparable to published COCO numbers
+{'test_look': 'reproduction', 'written': 'outputs/yolox_detection_evaluation_report_reproduction_1.json'}
+{
+  "selected": {
+    "ap": 0.8933,
+    "ap50": 1.0,
+    "per_class_ap50": {
+      "stop-sign": 1.0,
+      "yield-sign": 1.0,
+      "speed-limit-sign": 1.0
+    },
+    "n_images": 200,
+    "n_references": 386
+  },
+  "baseline": {
+    "ap": 0.1317,
+    "ap50": 0.1388,
+    "per_class_ap50": {
+      "stop-sign": 0.0219,
+      "yield-sign": 0.0,
+      "speed-limit-sign": 0.3944
+    },
+    "n_images": 200,
+    "n_references": 386
+  },
+  "verdict": "improved",
+  "ap_difference": 0.7616,
+  "ci95": [
+    0.7381,
+    0.782
+  ]
+}
+per-image results for 200 images written to outputs/yolox_detection_fresh_test_per_image_reproduction_1.json; every box found at IoU 0.5 on 200 images (selected) and 35 (baseline)
+reproduction of the pre-registered evaluation of 2026-10-18 (commit 4429e0e): matches the record
+run 1: {'freeze_backbone': True, 'batch_size': 2, 'grid_on': True, 'selected_config': 'C1', 'val_ap': 0.8937, 'val_ap50': 1.0, 'finetune_seconds': 8.1, 'test_look': 'reproduction'}
+[colab] Executing cell 22/25 - yolox_detection-48...
+{"image": 0, "truth": ["yield-sign", "yield-sign"], "detections": [["yield-sign", 0.909], ["yield-sign", 0.882]], "same_label_iou": [0.935, 0.955]}
+{"image": 1, "truth": ["speed-limit-sign", "yield-sign"], "detections": [["yield-sign", 0.9], ["speed-limit-sign", 0.875]], "same_label_iou": [0.929, 0.947]}
+{"image": 2, "truth": ["stop-sign"], "detections": [["stop-sign", 0.907]], "same_label_iou": [0.891]}
+<PIL.Image.Image image mode=RGB size=640x214 at 0x7AE048517AD0>
+
+[Image saved to: /tmp/tmp19ejjbgy.png]
+[colab] Executing cell 23/25 - yolox_detection-50...
+{
+  "path": "outputs/yolox-detection-adapter.safetensors",
+  "bytes": 35895336,
+  "sha256": "770d0218dfd9e6bff55450e3ad99f3ad7fce50ad230f22e7861dcce4e61116cc",
+  "sidecar": "outputs/yolox-detection-adapter.json",
+  "sidecar_sha256": "2d08d512fc9119e360f0bf50fa80d7ace47eb166f7e570c6c09ab7b7fb907daa",
+  "format": "dimer-yolox-detection-adapter/2",
+  "class_names": [
+    "stop-sign",
+    "yield-sign",
+    "speed-limit-sign"
+  ],
+  "tensors": 462,
+  "model_id": "Megvii-BaseDetection/YOLOX",
+  "model_revision": "0.1.1rc0"
+}
+{'source': 'artifact:yolox-detection-adapter.safetensors', 'class_names': ['stop-sign', 'yield-sign', 'speed-limit-sign'], 'adapted': True}
+{'reloaded_val_ap': 0.8937, 'reloaded_val_ap50': 1.0}
+fresh reload reproduces the validation scores of the selected system (C1) exactly
+tampered artifact (one weight byte flipped) refused -> artifact weights digest mismatch for 'tampered-artifact.safetensors': sidecar records 770d0218dfd9e6bff55450e3ad99f3ad7fce50ad230f22e7861dcce4e61116cc, file has a51c9ecd39f7be46372b7cf6345edca8b3640402bac8bbafe45855af2a9fee19
+tampered artifact (format tag edited) refused -> artifact format 'not-a-dimer-artifact/9' != 'dimer-yolox-detection-adapter/2'
+[colab] Executing cell 24/25 - yolox_detection-52...
+{'written': 'outputs/yolox_detection_results_reproduction_1.json', 'bytes': 27908, 'artifact': 'outputs/yolox-detection-adapter.safetensors', 'test_look': 'reproduction'}
+['grid', 'work', 'yolox-detection-adapter.json', 'yolox-detection-adapter.safetensors', 'yolox_detection_evaluation_report_reproduction_1.json', 'yolox_detection_fresh_test_per_image_reproduction_1.json', 'yolox_detection_results_reproduction_1.json']
+[colab] Executing cell 25/25 - yolox_detection-54...
+refused an image that is not a PIL image -> TypeError: image must be a PIL.Image.Image, got str
+refused a box outside its image -> ValueError: record 0: box [0, 0, 9999, 10] falls outside the 640x640 image
+BYOD image branch is off; set USE_BYOD_IMAGE = True (and optionally BYOD_IMAGE_PATH) and re-run this cell.
+BYOD dataset branch is off; set USE_BYOD_DATASET = True and BYOD_DATASET_DIR (or upload), then re-run this cell.
+[colab] Saving notebook with outputs to '<local-run-dir>/yolox_detection_finetune_colab_1792c3f_colab-cli-t4_output.ipynb'...

@@ -92,6 +92,9 @@ CODE_MARKERS = (
     # New-data inference, artifact export, fresh reload.
     "new_records = sign_dataset(3, seed=NEW_DATA_SEED)",
     "descriptor = selected_pipe.save_artifact(artifact_path, notes=",
+    "artifact_path = OUTPUTS / ARTIFACT_FILE",
+    "save_file(state, str(partial)",
+    "load_file(str(artifact_path)",
     "reloaded = YoloxDetectionPipeline.load_artifact(artifact_path)",
     "reloaded_metrics = reloaded.evaluate(validation_records)",
     "assert abs(reloaded_metrics['ap'] - selected_val['ap']) < 1e-9",
@@ -258,16 +261,27 @@ FORBIDDEN_PATTERNS = (
     ("mutable model reference (MOD14)", re.compile(r"revision\s*=\s*['\"](?:main|latest)['\"]")),
     ("trust_remote_code enabled", re.compile(r"trust_remote_code\s*[=:]\s*True")),
     (
-        # The YOLOX checkpoint and the exported adapter are both pickles, so this profile must call
-        # torch.load. What makes that safe is `weights_only=True` (which refuses arbitrary globals)
-        # after a SHA-256 check against the committed manifest, so the ban is on a torch.load that
-        # does *not* restrict itself — an unqualified call, or an explicit weights_only=False.
+        # The upstream YOLOX checkpoint is a pickle, so this profile must call torch.load for it. What
+        # makes that safe is `weights_only=True` (which refuses arbitrary globals) after a SHA-256 check
+        # against the committed manifest, so the ban is on a torch.load that does *not* restrict itself —
+        # an unqualified call, or an explicit weights_only=False. The exported adapter is safetensors.
         "unsafe deserialization",
         re.compile(
             r"\bpickle\.load"
             r"|\btorch\.load\s*\((?![^)]*weights_only\s*=\s*True)"
             r"|weights_only\s*=\s*False"
             r"|getattr\(\s*torch\s*,\s*['\"]load['\"]"
+        ),
+    ),
+    # The exported adapter is a safetensors state dict plus a JSON sidecar (the safe-format rule: never
+    # publish weights only as a pickle). No cell may write a pickle again: no torch.save, no pickle.dump,
+    # and no `.pt`/`.pth`/`.bin`/`.ckpt` file named as an output.
+    (
+        "pickle artifact export",
+        re.compile(
+            r"\btorch\.save\s*\(|\bpickle\.dumps?\s*\("
+            r"|OUTPUTS\s*/\s*['\"][^'\"]*\.(?:pt|pth|bin|ckpt)['\"]"
+            r"|ARTIFACT_FILE\s*=\s*['\"][^'\"]*\.(?:pt|pth|bin|ckpt)['\"]"
         ),
     ),
     ("archive extractall", re.compile(r"\.extractall\s*\(")),

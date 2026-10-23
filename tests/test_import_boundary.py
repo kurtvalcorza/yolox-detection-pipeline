@@ -81,12 +81,17 @@ def test_from_pretrained_reaches_the_model_import_only_after_verification(
         YoloxDetectionPipeline.from_pretrained(device="cpu", weights_dir=tmp_path, allow_download=False)
 
 
-def test_load_artifact_rejects_a_foreign_format_before_building_a_model(tmp_path) -> None:
-    """Artifacts are pickles too. The format tag and the pinned identity are checked on the way in."""
-    import torch
+def _sidecar_artifact(root, name: str, metadata: dict):
+    """A `.safetensors` stand-in plus its JSON sidecar; every refusal below fires before a weight is read."""
+    weights = root / f"{name}.safetensors"
+    weights.write_bytes(b"never read: the sidecar is refused first")
+    (root / f"{name}.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return weights
 
-    path = tmp_path / "artifact.pt"
-    torch.save({"format": "something-else/1", "class_names": ["a"], "state_dict": {}}, path)
+
+def test_load_artifact_rejects_a_foreign_format_before_building_a_model(tmp_path) -> None:
+    """The sidecar's format tag and pinned identity are checked before any weights are read."""
+    path = _sidecar_artifact(tmp_path, "artifact", {"format": "something-else/1", "class_names": ["a"]})
     with pytest.raises(ValueError, match="artifact format"):
         YoloxDetectionPipeline.load_artifact(path)
 
@@ -95,42 +100,36 @@ def test_load_artifact_rejects_the_sibling_variants_artifact(tmp_path) -> None:
     """YOLOX-S and YOLOX-X are assets of the same upstream release, so they share MODEL_ID and
     MODEL_REVISION; only MODEL_KEY tells them apart. Without that check a sibling's adapter passes
     the identity check and fails afterwards inside load_state_dict with a tensor-shape error."""
-    import torch
-
     from yolox_detection_pipeline.pipeline import ARTIFACT_FORMAT, MODEL_KEY
 
     other = "yolox-x" if MODEL_KEY == "yolox-s" else "yolox-s"
-    path = tmp_path / "sibling.pt"
-    torch.save(
+    path = _sidecar_artifact(
+        tmp_path,
+        "sibling",
         {
             "format": ARTIFACT_FORMAT,
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,
             "model_key": other,
             "class_names": ["a"],
-            "state_dict": {},
         },
-        path,
     )
     with pytest.raises(ValueError, match="variant"):
         YoloxDetectionPipeline.load_artifact(path)
 
 
 def test_load_artifact_rejects_an_artifact_built_on_another_checkpoint(tmp_path) -> None:
-    import torch
-
     from yolox_detection_pipeline.pipeline import ARTIFACT_FORMAT
 
-    path = tmp_path / "artifact.pt"
-    torch.save(
+    path = _sidecar_artifact(
+        tmp_path,
+        "artifact",
         {
             "format": ARTIFACT_FORMAT,
             "model_id": MODEL_ID,
             "model_revision": "0.3.0",
             "class_names": ["a"],
-            "state_dict": {},
         },
-        path,
     )
     with pytest.raises(ValueError, match="package pins"):
         YoloxDetectionPipeline.load_artifact(path)

@@ -127,9 +127,14 @@ DEFAULT_EPOCHS = 6
 DEFAULT_BATCH_SIZE = 2
 DEFAULT_LEARNING_RATE = 1e-3
 DEFAULT_SEED = 0
-# Artifact format tag written into every exported artifact and checked on reload.
-ARTIFACT_FORMAT = "dimer-yolox-detection-adapter/1"
-ARTIFACT_FILE = "yolox-detection-adapter.pt"
+# Artifact format tag written into every exported artifact and checked on reload. Version 2 is the
+# safetensors export: the weights are a `.safetensors` state dict (tensors only, no pickle, nothing
+# that runs code when it is read) and the metadata is a plain-JSON sidecar beside it. Version 1 was a
+# single `torch.save` pickle; it is no longer written or read.
+ARTIFACT_FORMAT = "dimer-yolox-detection-adapter/2"
+ARTIFACT_FILE = "yolox-detection-adapter.safetensors"
+ARTIFACT_WEIGHTS_SUFFIX = ".safetensors"
+ARTIFACT_SIDECAR_SUFFIX = ".json"
 # IoU thresholds of the COCO primary metric: AP@[.50:.95] averaged over ten thresholds.
 COCO_IOU_THRESHOLDS = tuple(round(0.50 + 0.05 * i, 2) for i in range(10))
 # COCO scores at most this many detections per image. Without the cap a model that has not learned to
@@ -907,15 +912,33 @@ class YoloxDetectionPipeline:
     ) -> YoloxDetectionPipeline:
         """Rebuild an adapted pipeline from an exported artifact, in a process that never fine-tuned.
 
-        The artifact records its own format tag, pinned identity, model key, class vocabulary and the
-        digest of the base weights it started from; a mismatch raises rather than silently loading a
-        different model. The model key matters because every YOLOX variant is an asset of the same
+        ``path`` is the ``.safetensors`` weights file; its metadata is the ``.json`` sidecar beside it.
+        The sidecar is read as plain JSON first and records the format tag, pinned identity, model key,
+        class vocabulary, the digest of the base weights it started from and the SHA-256 of the weights
+        file. Every check runs before a tensor is read: a mismatch raises rather than silently loading a
+        different model, and a weights file whose SHA-256 differs from the sidecar's is refused before
+        it is opened. The model key matters because every YOLOX variant is an asset of the same
         upstream release, so the id and revision alone do not say which network the weights are for.
+        The weights are then read with ``safetensors.torch.load_file`` (tensors only, no pickle) and
+        applied with ``load_state_dict(strict=True)``. Version-1 ``.pt`` pickle artifacts are refused.
         """
         import torch
 
         artifact_path = Path(path)
-        payload = torch.load(artifact_path, map_location="cpu", weights_only=True)
+        if artifact_path.suffix != ARTIFACT_WEIGHTS_SUFFIX:
+            raise ValueError(
+                f"artifact {artifact_path.name!r} is not a {ARTIFACT_WEIGHTS_SUFFIX} file; the "
+                f"{ARTIFACT_FORMAT} export is a safetensors state dict plus a JSON sidecar, and "
+                "pickle (.pt) artifacts are not read"
+            )
+        sidecar_path = artifact_path.with_suffix(ARTIFACT_SIDECAR_SUFFIX)
+        if not sidecar_path.is_file():
+            raise ValueError(
+                f"artifact sidecar {sidecar_path.name!r} is missing beside {artifact_path.name!r}"
+            )
+        payload = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"artifact sidecar {sidecar_path.name!r} is not a JSON object")
         if payload.get("format") != ARTIFACT_FORMAT:
             raise ValueError(f"artifact format {payload.get('format')!r} != {ARTIFACT_FORMAT!r}")
         if payload.get("model_id") != MODEL_ID or payload.get("model_revision") != MODEL_REVISION:
@@ -932,9 +955,22 @@ class YoloxDetectionPipeline:
                 f"artifact was built on the {payload.get('model_key')!r} variant, "
                 f"package pins {MODEL_KEY!r}"
             )
+        # The digest is checked before the weights file is opened, so a substituted or corrupted file is
+        # refused without being parsed at all.
+        expected = payload.get("weights_sha256")
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise ValueError(f"artifact sidecar {sidecar_path.name!r} records no weights_sha256")
+        actual = _sha256(artifact_path)
+        if actual != expected:
+            raise ValueError(
+                f"artifact weights digest mismatch for {artifact_path.name!r}: sidecar records {expected}, "
+                f"file has {actual}"
+            )
+        from safetensors.torch import load_file
+
         names = tuple(payload["class_names"])
         model = cls._build(len(names))
-        model.load_state_dict(payload["state_dict"], strict=True)
+        model.load_state_dict(load_file(str(artifact_path), device="cpu"), strict=True)
         resolved_device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
         model = model.to(resolved_device).eval()
         return cls(
@@ -1220,42 +1256,70 @@ class YoloxDetectionPipeline:
     # -- artifact ------------------------------------------------------------------------------
 
     def save_artifact(self, path: str | Path, *, notes: str | None = None) -> dict[str, Any]:
-        """Write the adapted weights and their provenance as one artifact; return its descriptor.
+        """Write the adapted weights and their provenance as a safetensors file plus a JSON sidecar.
 
-        A single ``torch.save`` of tensors and plain metadata — no archive, no pickled objects beyond
-        what ``weights_only=True`` accepts on reload, so there is no extraction step to make safe.
+        ``path`` must end in ``.safetensors``. That file holds the state dict only, written with
+        ``safetensors.torch.save_file`` (tensors, no pickle, nothing that runs code when read). The
+        sidecar ``<name>.json`` beside it holds the metadata as plain JSON strings, numbers, booleans and
+        lists: the format tag, pinned identity, model key, class vocabulary, architecture constants, the
+        digest of the base weights and the SHA-256 of the weights file, which ``load_artifact`` checks
+        before it opens the weights. No ``.pt`` is written.
         """
         import torch
+        from safetensors.torch import save_file
 
         artifact_path = Path(path)
+        if artifact_path.suffix != ARTIFACT_WEIGHTS_SUFFIX:
+            raise ValueError(
+                f"artifact path {artifact_path.name!r} must end in {ARTIFACT_WEIGHTS_SUFFIX}; "
+                "the adapter is exported as safetensors, never as a pickle"
+            )
+        sidecar_path = artifact_path.with_suffix(ARTIFACT_SIDECAR_SUFFIX)
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
+        # save_file refuses tensors that share storage and requires contiguous ones. YOLOX ties no
+        # weights, but each tensor is still cloned into its own contiguous CPU storage so a shared or
+        # strided view can never reach the writer; load_state_dict(strict=True) restores it exactly.
+        state = {
+            name: value.detach().to("cpu").contiguous().clone()
+            for name, value in self.model.state_dict().items()
+            if isinstance(value, torch.Tensor)
+        }
+        # Review R116-m4: write sibling temporary files and rename them, so an interrupted save never leaves
+        # a half-written artifact in place of the previous one. The weights land first, then the sidecar
+        # that names their digest.
+        partial = artifact_path.with_name(f"{artifact_path.name}.partial")
+        save_file(state, str(partial), metadata={"format": ARTIFACT_FORMAT, "model_key": MODEL_KEY})
+        weights_sha256 = _sha256(partial)
+        sidecar = {
             "format": ARTIFACT_FORMAT,
+            "weights_file": artifact_path.name,
+            "weights_sha256": weights_sha256,
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,
             "upstream_code_revision": UPSTREAM_CODE_REVISION,
             "model_key": MODEL_KEY,
-            "class_names": list(self.class_names),
+            "class_names": [str(name) for name in self.class_names],
             "depth": MODEL_DEPTH,
             "width": MODEL_WIDTH,
             "input_size": list(INPUT_SIZE),
-            "adapted": self.adapted,
+            "adapted": bool(self.adapted),
             "base_state_digest": self.base_state_digest,
-            "notes": notes or "",
-            "state_dict": {k: v.detach().cpu() for k, v in self.model.state_dict().items()},
+            "notes": str(notes or ""),
+            "tensors": len(state),
         }
-        # Review R116-m4: write a sibling temporary file and rename it, so an interrupted save never leaves a
-        # half-written artifact in place of the previous one.
-        partial = artifact_path.with_name(f"{artifact_path.name}.partial")
-        torch.save(payload, partial)
+        sidecar_partial = sidecar_path.with_name(f"{sidecar_path.name}.partial")
+        sidecar_partial.write_text(json.dumps(sidecar, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         os.replace(partial, artifact_path)
+        os.replace(sidecar_partial, sidecar_path)
         return {
             "path": str(artifact_path),
             "bytes": artifact_path.stat().st_size,
-            "sha256": _sha256(artifact_path),
+            "sha256": weights_sha256,
+            "sidecar": str(sidecar_path),
+            "sidecar_sha256": _sha256(sidecar_path),
             "format": ARTIFACT_FORMAT,
             "class_names": list(self.class_names),
-            "tensors": len(payload["state_dict"]),
+            "tensors": len(state),
             "base_state_digest": self.base_state_digest,
             "model_id": MODEL_ID,
             "model_revision": MODEL_REVISION,

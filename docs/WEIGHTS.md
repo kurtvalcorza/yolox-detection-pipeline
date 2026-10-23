@@ -39,9 +39,13 @@ Two protections, in this order:
    (`torch.hub.load_state_dict_from_url`, which fetches with no digest check at all) is deliberately
    not vendored.
 
-Exported adapters are pickles too, and are treated the same way: `load_artifact` reads them with
-`weights_only=True` and refuses a foreign format tag or a mismatched pinned identity before building
-a model.
+Exported adapters are **not** pickles. `save_artifact` writes the adapted state dict as
+`yolox-detection-adapter.safetensors` (tensors only, via `safetensors.torch.save_file`) and its metadata as a
+plain-JSON sidecar `yolox-detection-adapter.json` that also records the SHA-256 of the weights file.
+`load_artifact` reads the sidecar, refuses a foreign format tag, a mismatched pinned identity or model
+key, or a weights file whose SHA-256 differs from the sidecar's, all before the weights are opened,
+then reads them with `safetensors.torch.load_file` and applies them with `load_state_dict(strict=True)`.
+Version-1 `.pt` adapters are no longer written or read.
 
 ## Staging
 
