@@ -168,13 +168,16 @@ import torch
 from yolox_detection_pipeline.pipeline import YoloxDetectionPipeline
 torch.manual_seed(0)
 model = YoloxDetectionPipeline._build(3).eval()
-pipe = YoloxDetectionPipeline(model=model, device="cpu", class_names=("stop-sign", "yield-sign", "speed-limit-sign"),
-                              source="test", base_state_digest="0" * 64, adapted=True)
+names = ("stop-sign", "yield-sign", "speed-limit-sign")
+pipe = YoloxDetectionPipeline(model=model, device="cpu", class_names=names, source="test",
+                              base_state_digest="0" * 64, adapted=True)
 print(pipe.save_artifact(sys.argv[1], notes="unit test")["sha256"])
 """
 
 
-def test_identical_inputs_give_identical_bytes_across_saves_and_processes(adapted_pipe, exported, tmp_path) -> None:
+def test_identical_inputs_give_identical_bytes_across_saves_and_processes(
+    adapted_pipe, exported, tmp_path
+) -> None:
     # safetensors 0.8 writes header keys in hash order, which differs between processes; the exported
     # header is canonicalised so the weights file (and so the sidecar's digest) depends on content only.
     import subprocess
@@ -231,7 +234,7 @@ def test_weights_file_is_exactly_a_header_and_tensor_data_with_no_pickle(exporte
     # The tensor spans tile the data block exactly: no byte of the file lies outside the JSON header or
     # a declared tensor, so there is nowhere for a pickle or any other payload to hide.
     assert spans[0][0] == 0
-    assert all(prev[1] == nxt[0] for prev, nxt in zip(spans, spans[1:]))
+    assert all(prev[1] == nxt[0] for prev, nxt in zip(spans, spans[1:], strict=False))
     assert spans[-1][1] == len(raw) - 8 - header_len
 
 
