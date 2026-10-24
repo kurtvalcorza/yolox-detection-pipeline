@@ -48,7 +48,7 @@ Three steps, in this order:
    converted tensors equal the source's exactly and the detections on the tutorial scene are identical.
 
 Exported adapters are **not** pickles. `save_artifact` writes the adapted state dict as
-`yolox-detection-adapter.safetensors` (tensors only, via `safetensors.torch.save_file`) and its metadata as a
+`yolox-detection-adapter.safetensors` (tensors only, via `safetensors.torch.save`, with the header keys sorted so identical weights give identical bytes) and its metadata as a
 plain-JSON sidecar `yolox-detection-adapter.json` that also records the SHA-256 of the weights file.
 `load_artifact` reads the sidecar, refuses a foreign format tag, a mismatched pinned identity or model
 key, or a weights file whose SHA-256 differs from the sidecar's, all before the weights are opened,

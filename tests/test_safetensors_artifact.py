@@ -160,3 +160,111 @@ def test_pickle_paths_are_refused_on_save_and_on_load(adapted_pipe, tmp_path) ->
     torch.save({"format": "dimer-yolox-detection-adapter/1", "state_dict": {}}, legacy)
     with pytest.raises(ValueError, match="pickle"):
         YoloxDetectionPipeline.load_artifact(legacy)
+
+
+_SAVE_IN_FRESH_PROCESS = """
+import sys
+import torch
+from yolox_detection_pipeline.pipeline import YoloxDetectionPipeline
+torch.manual_seed(0)
+model = YoloxDetectionPipeline._build(3).eval()
+names = ("stop-sign", "yield-sign", "speed-limit-sign")
+pipe = YoloxDetectionPipeline(model=model, device="cpu", class_names=names, source="test",
+                              base_state_digest="0" * 64, adapted=True)
+print(pipe.save_artifact(sys.argv[1], notes="unit test")["sha256"])
+"""
+
+
+def test_identical_inputs_give_identical_bytes_across_saves_and_processes(
+    adapted_pipe, exported, tmp_path
+) -> None:
+    # safetensors 0.8 writes header keys in hash order, which differs between processes; the exported
+    # header is canonicalised so the weights file (and so the sidecar's digest) depends on content only.
+    import subprocess
+    import sys
+
+    out, descriptor = exported
+    again = adapted_pipe.save_artifact(tmp_path / "again" / ARTIFACT_FILE, notes="unit test")
+    assert (tmp_path / "again" / ARTIFACT_FILE).read_bytes() == (out / ARTIFACT_FILE).read_bytes()
+    sidecar_name = ARTIFACT_FILE.replace(".safetensors", ".json")
+    assert (tmp_path / "again" / sidecar_name).read_bytes() == (out / sidecar_name).read_bytes()
+    assert again["sha256"] == descriptor["sha256"]
+
+    shas = {
+        subprocess.run(
+            [sys.executable, "-c", _SAVE_IN_FRESH_PROCESS, str(tmp_path / f"proc{i}" / ARTIFACT_FILE)],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        for i in range(2)
+    }
+    assert shas == {descriptor["sha256"]}
+
+
+def test_canonical_header_has_sorted_keys_and_keeps_the_tensor_bytes() -> None:
+    from safetensors.torch import load, save
+
+    tensors = {"b": torch.arange(6, dtype=torch.float32).reshape(2, 3), "a": torch.ones(3, dtype=torch.int64)}
+    metadata = {key: str(i) for i, key in enumerate(["zeta", "alpha", "format", "model_key", "mid", "beta"])}
+    outputs = {pipeline_module._canonical_safetensors(save(tensors, metadata=metadata)) for _ in range(8)}
+    assert len(outputs) == 1
+    raw = outputs.pop()
+    header_len = int.from_bytes(raw[:8], "little")
+    assert header_len % 8 == 0
+    text = raw[8 : 8 + header_len].decode("utf-8").rstrip(" ")
+    header = json.loads(text)
+    assert text == json.dumps(header, sort_keys=True, separators=(",", ":"))
+    assert list(header["__metadata__"]) == sorted(metadata)
+    reloaded = load(raw)
+    assert all(torch.equal(reloaded[name], tensors[name]) for name in tensors)
+
+
+def test_canonical_header_accepts_non_ascii_metadata(tmp_path) -> None:
+    # Claude review YOLOX-1: escaping non-ASCII made the canonical header longer than the original.
+    from safetensors import safe_open
+    from safetensors.torch import save
+
+    tensors = {"w": torch.zeros(2)}
+    metadata = {"notes": "Señales de tráfico — 交通标志", "format": "x"}
+    path = tmp_path / "non_ascii.safetensors"
+    path.write_bytes(pipeline_module._canonical_safetensors(save(tensors, metadata=metadata)))
+    with safe_open(str(path), framework="pt") as fh:
+        assert fh.metadata() == metadata
+
+
+def test_weights_file_is_exactly_a_header_and_tensor_data_with_no_pickle(exported) -> None:
+    import zipfile
+
+    out, _ = exported
+    path = out / ARTIFACT_FILE
+    raw = path.read_bytes()
+    assert not zipfile.is_zipfile(path)  # torch.save writes a zip archive
+    assert raw[0] != 0x80  # a raw pickle starts with the PROTO opcode
+    header_len = int.from_bytes(raw[:8], "little")
+    header = json.loads(raw[8 : 8 + header_len])
+    assert set(header["__metadata__"]) == {"format", "model_key"}
+    assert all(isinstance(v, str) for v in header["__metadata__"].values())
+    spans = sorted(tuple(entry["data_offsets"]) for name, entry in header.items() if name != "__metadata__")
+    # The tensor spans tile the data block exactly: no byte of the file lies outside the JSON header or
+    # a declared tensor, so there is nowhere for a pickle or any other payload to hide.
+    assert spans[0][0] == 0
+    assert all(prev[1] == nxt[0] for prev, nxt in zip(spans, spans[1:], strict=False))
+    assert spans[-1][1] == len(raw) - 8 - header_len
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("format", "dimer-yolox-detection-adapter/1", "artifact format"),
+        ("model_key", "yolox-m", "variant"),
+        ("model_revision", "0.0.0", "package pins"),
+    ],
+)
+def test_wrong_format_or_identity_in_the_sidecar_is_refused(exported, tmp_path, field, value, message):
+    out, _ = exported
+    weights = _copy_artifact(out, tmp_path)
+    sidecar = weights.with_suffix(".json")
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload[field] = value
+    sidecar.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        YoloxDetectionPipeline.load_artifact(weights)
