@@ -6,6 +6,12 @@ Hugging Face model repository, so provenance here is a release asset URL plus th
 upstream repository at a pinned commit (``docs/UPSTREAM.md``); nothing is imported from the ``yolox``
 distribution and no remote code is executed.
 
+The upstream checkpoint is a pickle, so it is staged once, digest-verified, read with
+``torch.load(..., weights_only=True)`` (which refuses arbitrary globals) and converted into
+``yolox_s.safetensors``, whose SHA-256 is pinned below as ``CONVERTED_SHA256``. The model is served only
+from that converted file, with ``load_state_dict(strict=True)``; once it exists the pickle source is never
+read again.
+
 Two capabilities:
 
 * ``detect`` — the 80 COCO classes, score-ordered xyxy pixel boxes, caller-owned confidence and NMS
@@ -66,6 +72,11 @@ RELEASE_ASSET_URL = (
 )
 DEFAULT_WEIGHTS_DIR = Path(__file__).resolve().parents[2] / "weights" / MODEL_KEY
 MANIFEST_NAME = "dimer-base-manifest.json"
+# The served file: the checkpoint's "model" state dict, converted once into safetensors (tensors only, no
+# pickle). Its digest is pinned, so the conversion is byte-reproducible and a different file is refused.
+CONVERTED_FILE = "yolox_s.safetensors"
+CONVERTED_SHA256 = "8fa0c1135952a70148c3e3114ac1ddae2d399600053841b89738dc3694e3aaf0"
+CONVERTED_METADATA = {"format": "pt"}
 
 # --- Architecture -----------------------------------------------------------------------------
 # YOLOX-S scaling factors, from upstream `exps/default/yolox_s.py`. YOLOX-X is 1.33/1.25 and lives in
@@ -157,8 +168,8 @@ def _sha256(path: Path) -> str:
 def verify_snapshot(path: str | Path | None = None) -> dict[str, Any]:
     """Check a local snapshot against its DIMER manifest; raise naming the first mismatch.
 
-    The checkpoint is a pickle, so this runs *before* anything unpickles it: ``from_pretrained``
-    verifies, then imports torch, then loads.
+    The checkpoint is a pickle, so this runs *before* anything unpickles it: ``convert_checkpoint``
+    verifies, then imports torch, then reads it once to write the safetensors serving file.
     """
     root = Path(path) if path is not None else DEFAULT_WEIGHTS_DIR
     manifest_path = root / MANIFEST_NAME
@@ -240,6 +251,66 @@ def stage_missing_files(
     for relative_path in missing:
         fetch(relative_path, root)
     return missing
+
+
+def _write_converted(state: Mapping[str, Any], target: Path) -> None:
+    """Write a state dict as safetensors, byte-reproducibly.
+
+    Every tensor is cloned into its own contiguous CPU storage (safetensors refuses shared storage) and the
+    one-key metadata header has a fixed order, so the same state dict always gives the same bytes.
+    """
+    from safetensors.torch import save_file
+
+    tensors = {name: value.detach().to("cpu").contiguous().clone() for name, value in state.items()}
+    save_file(tensors, str(target), metadata=dict(CONVERTED_METADATA))
+
+
+def verify_converted(path: str | Path | None = None) -> dict[str, Any]:
+    """Check the converted serving file against its pinned SHA-256; raise on a missing or altered file."""
+    root = Path(path) if path is not None else DEFAULT_WEIGHTS_DIR
+    file_path = root / CONVERTED_FILE
+    if not file_path.is_file():
+        raise FileNotFoundError(f"converted weights missing: {file_path}")
+    digest = _sha256(file_path)
+    if digest != CONVERTED_SHA256:
+        raise ValueError(f"{CONVERTED_FILE}: sha256 {digest} != pinned {CONVERTED_SHA256}")
+    return {"path": CONVERTED_FILE, "bytes": file_path.stat().st_size, "sha256": digest}
+
+
+def convert_checkpoint(path: str | Path | None = None) -> dict[str, Any]:
+    """Convert the verified pickle checkpoint into the pinned safetensors file, once.
+
+    The source must pass ``verify_snapshot`` first. It is read with ``torch.load(..., weights_only=True)``;
+    its ``"model"`` entry (the release file also carries ``amp``, ``optimizer`` and ``start_epoch``, which
+    are dropped) must be a flat dict of tensors that loads into the vendored 80-class architecture with
+    ``strict=True``. The written file must then hash to ``CONVERTED_SHA256``, or it is deleted and the
+    conversion refused.
+    """
+    root = Path(path) if path is not None else DEFAULT_WEIGHTS_DIR
+    source = verify_snapshot(root)
+    import torch
+
+    payload = torch.load(root / CHECKPOINT_FILE, map_location="cpu", weights_only=True)
+    state = payload["model"] if isinstance(payload, dict) and "model" in payload else payload
+    if not isinstance(state, dict) or any(not isinstance(v, torch.Tensor) for v in state.values()):
+        raise ValueError(f"{CHECKPOINT_FILE} did not unpickle to a state dict of tensors")
+    _build_model(len(LABELS)).load_state_dict(state, strict=True)
+    target = root / CONVERTED_FILE
+    partial = target.with_name(target.name + ".partial")
+    _write_converted(state, partial)
+    digest = _sha256(partial)
+    if digest != CONVERTED_SHA256:
+        partial.unlink()
+        raise ValueError(
+            f"conversion of {CHECKPOINT_FILE} hashed to {digest}, not the pinned {CONVERTED_SHA256}"
+        )
+    partial.replace(target)
+    return {"source": source, "converted": verify_converted(root), "tensors": len(state)}
+
+
+def _build_model(num_classes: int) -> Any:
+    """The vendored architecture with random weights; a module-level seam so tests can swap it."""
+    return YoloxDetectionPipeline._build(num_classes)
 
 
 # --- Geometry and preprocessing ---------------------------------------------------------------
@@ -811,7 +882,12 @@ class YoloxDetectionPipeline:
         class_names: Sequence[str] | None = None,
         seed: int = DEFAULT_SEED,
     ) -> YoloxDetectionPipeline:
-        """Build YOLOX-S and load the verified checkpoint.
+        """Build YOLOX-S and load the verified safetensors conversion.
+
+        When ``yolox_s.safetensors`` is absent, the pickle checkpoint is staged, digest-verified and
+        converted once (``convert_checkpoint``). The served weights always come from the converted file,
+        checked against ``CONVERTED_SHA256`` and read with ``safetensors.torch.load_file``; this method
+        never unpickles anything itself.
 
         With ``class_names`` the classification branch is rebuilt for that vocabulary and randomly
         initialised while the backbone, neck, box and objectness weights are kept — the starting point
@@ -825,27 +901,26 @@ class YoloxDetectionPipeline:
         seeding here cannot perturb a caller's own stream.
         """
         root = Path(weights_dir) if weights_dir is not None else DEFAULT_WEIGHTS_DIR
-        if (root / MANIFEST_NAME).is_file():
+        if not (root / CONVERTED_FILE).is_file():
+            if not (root / MANIFEST_NAME).is_file():
+                raise FileNotFoundError(
+                    f"no manifest at {root}; commit weights/{MODEL_KEY}/{MANIFEST_NAME} and stage "
+                    f"{CHECKPOINT_FILE} from the {MODEL_REVISION} release assets"
+                )
             stage_missing_files(root, allow_download=allow_download)
             verify_snapshot(root)
-        else:
-            raise FileNotFoundError(
-                f"no manifest at {root}; commit weights/{MODEL_KEY}/{MANIFEST_NAME} and stage "
-                f"{CHECKPOINT_FILE} from the {MODEL_REVISION} release assets"
-            )
         names = tuple(class_names) if class_names is not None else LABELS
         if not 1 <= len(names) <= MAX_CLASSES:
             raise ValueError(f"class_names must hold 1..{MAX_CLASSES} names, got {len(names)}")
+        if not (root / CONVERTED_FILE).is_file():
+            convert_checkpoint(root)
+        # Refuse an altered conversion before importing torch or reading a single tensor.
+        verify_converted(root)
 
-        # Refuse an invalid snapshot before importing torch or unpickling anything.
         import torch
+        from safetensors.torch import load_file
 
-        checkpoint_path = root / CHECKPOINT_FILE
-        # The upstream checkpoint is a pickle, not SafeTensors. It is a plain tensor/int dict, so
-        # weights_only=True is enough to load it without allowing arbitrary globals; the digest was
-        # already checked above. Upstream's own loader passes neither.
-        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-        state = payload["model"] if isinstance(payload, dict) and "model" in payload else payload
+        state = load_file(str(root / CONVERTED_FILE), device="cpu")
         digest = hashlib.sha256(
             b"".join(state[key].detach().cpu().numpy().tobytes() for key in sorted(state))
         ).hexdigest()
@@ -853,7 +928,7 @@ class YoloxDetectionPipeline:
         rng_state = torch.get_rng_state()
         try:
             torch.manual_seed(seed)
-            model = cls._build(len(names))
+            model = _build_model(len(names))
         finally:
             torch.set_rng_state(rng_state)
         reinitialised: tuple[str, ...] = ()

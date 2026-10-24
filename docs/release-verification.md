@@ -1,5 +1,7 @@
 # Release verification
 
+**Pending hosted run (REL14).** **Safetensors serving (2026-10-24).** The model is now served from `yolox_s.safetensors`, a safetensors conversion of the upstream `.pth` whose SHA-256 (`8fa0c1135952…`) is pinned in code, instead of from the pickle itself (code commit `73eef81`). The regenerated notebook `yolox_detection_finetune_colab.ipynb` is blob `0c4430e821f5`. No hosted run of this blob is recorded yet, so it is Candidate until one is (REL14); every hosted run recorded in this file executed an earlier blob and stays as history, not evidence for this one.
+
 This file is the release gate for `tutorials/yolox_detection_finetune_colab.ipynb`. Static validation
 (`tools/validate_release_assets.py`), the unit suite and CI are **not** clean-runtime execution
 evidence; only an execution recorded under "Recorded executions" is.
