@@ -218,6 +218,19 @@ def test_canonical_header_has_sorted_keys_and_keeps_the_tensor_bytes() -> None:
     assert all(torch.equal(reloaded[name], tensors[name]) for name in tensors)
 
 
+def test_canonical_header_accepts_non_ascii_metadata(tmp_path) -> None:
+    # Claude review YOLOX-1: escaping non-ASCII made the canonical header longer than the original.
+    from safetensors import safe_open
+    from safetensors.torch import save
+
+    tensors = {"w": torch.zeros(2)}
+    metadata = {"notes": "Señales de tráfico — 交通标志", "format": "x"}
+    path = tmp_path / "non_ascii.safetensors"
+    path.write_bytes(pipeline_module._canonical_safetensors(save(tensors, metadata=metadata)))
+    with safe_open(str(path), framework="pt") as fh:
+        assert fh.metadata() == metadata
+
+
 def test_weights_file_is_exactly_a_header_and_tensor_data_with_no_pickle(exported) -> None:
     import zipfile
 

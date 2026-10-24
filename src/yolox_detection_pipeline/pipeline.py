@@ -155,7 +155,9 @@ def _canonical_safetensors(raw: bytes) -> bytes:
     """
     header_len = int.from_bytes(raw[:8], "little")
     header = json.loads(raw[8 : 8 + header_len])
-    encoded = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    # ensure_ascii=False: safetensors writes non-ASCII metadata as raw UTF-8, so escaping it here would
+    # make the canonical header longer than the original and the save would fail.
+    encoded = json.dumps(header, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     if len(encoded) > header_len:
         raise RuntimeError("canonical safetensors header is longer than the one safetensors wrote")
     encoded += b" " * (header_len - len(encoded))
