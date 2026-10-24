@@ -261,7 +261,8 @@ FORBIDDEN_PATTERNS = (
     ("mutable model reference (MOD14)", re.compile(r"revision\s*=\s*['\"](?:main|latest)['\"]")),
     ("trust_remote_code enabled", re.compile(r"trust_remote_code\s*[=:]\s*True")),
     (
-        # The upstream YOLOX checkpoint is a pickle, so this profile must call torch.load for it. What
+        # The upstream YOLOX checkpoint is a pickle, so this profile must call torch.load for it, once, to
+        # write the safetensors file the model is served from. What
         # makes that safe is `weights_only=True` (which refuses arbitrary globals) after a SHA-256 check
         # against the committed manifest, so the ban is on a torch.load that does *not* restrict itself —
         # an unqualified call, or an explicit weights_only=False. The exported adapter is safetensors.
@@ -430,9 +431,14 @@ def validate_identity_consistency() -> None:
 # that no document cites any more are rejected, so the allowlist cannot go stale.
 WEIGHT_DOCS = ("README.md", "MODEL_CARD.md", "docs/WEIGHTS.md")
 EXTERNAL_WEIGHT_BYTES: dict[int, str] = {
+    36_014_492: "safetensors conversion of the staged checkpoint (served file)",
     35_998_819: "saved fine-tuned artifact size, build smoke run (run record)",
 }
-EXTERNAL_WEIGHT_DIGESTS: dict[str, str] = {}
+# The safetensors conversion of the staged checkpoint is not a manifest file (it is written locally by
+# `convert_checkpoint`); its digest equals the package's CONVERTED_SHA256 (a test checks it).
+EXTERNAL_WEIGHT_DIGESTS: dict[str, str] = {
+    "8fa0c1135952a70148c3e3114ac1ddae2d399600053841b89738dc3694e3aaf0": "safetensors conversion of the staged checkpoint (CONVERTED_SHA256)",
+}
 _DIGEST = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{64}(?![0-9a-fA-F])")
 _GROUPED = r"(\d{1,3}(?:[,\u202f\u00a0 ]\d{3})+|\d+)"
 _BYTE_COUNT = re.compile(r"(?<![\d,\-])" + _GROUPED + r"\s*bytes\b|totalBytes`?\s*" + _GROUPED)
