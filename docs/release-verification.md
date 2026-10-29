@@ -2,6 +2,8 @@
 
 **Current status (2026-10-24): Candidate.** **Safetensors serving (2026-10-24).** The model is now served from `yolox_s.safetensors`, a safetensors conversion of the upstream `.pth` whose SHA-256 (`8fa0c1135952…`) is pinned in code, instead of from the pickle itself (code commit `73eef81`). The regenerated notebook `yolox_detection_finetune_colab.ipynb` is blob `0c4430e821f5` (commit `85f4838`). Its default path and its Section 14 activity (`FREEZE_BACKBONE = False`) are covered by two hosted Colab T4 runs of that exact blob on 2026-10-24, both one pass with no restart and 0 errors ("Safetensors serving: hosted T4 runs (2026-10-24, commit 85f4838)" below). The remaining gates are REL12 (the BYOD journey) and REL2 (a browser Run all). Every hosted run of an earlier blob in this file stays as history (REL14), not evidence for this one.
 
+The current blob `a644491f` (code commit `71896bc`) shows a refused BYOD input as exactly one `Refused: <file>: <reason>` line, with no traceback, and stops Run all at that cell (previously the cell printed the refusal and Run all carried on); genuine failures keep their traceback (NOTEBOOK_SPEC DAT19/DAT20). Its hosted Colab T4 runs (the default path and a scripted refusal, `USE_BYOD_IMAGE=True;BYOD_IMAGE_PATH='/etc/hostname'`) are pending, and the hosted runs of earlier blobs, including `b564dcae`, are history for it (REL14).
+
 This file is the release gate for `tutorials/yolox_detection_finetune_colab.ipynb`. Static validation
 (`tools/validate_release_assets.py`), the unit suite and CI are **not** clean-runtime execution
 evidence; only an execution recorded under "Recorded executions" is.
