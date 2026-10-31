@@ -173,18 +173,19 @@ def test_M2_byod_dataset_branch_adapts_reloads_and_writes_a_result_with_no_code_
 
 
 def test_M2_byod_dataset_below_the_minimum_or_incompatible_is_refused(notebook: dict, tmp_path: Path, monkeypatch, capsys) -> None:
-    """R116-m7 (DAT20): a refused BYOD dataset prints one message naming the rule, writes nothing and raises nothing."""
+    """R116-m7 (DAT20): a refused BYOD dataset is one `Refused:` line naming the rule; it stops the run, writes nothing."""
     ns = _namespace(tmp_path, monkeypatch)
     small = _byod_dir(tmp_path, 4)
-    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(small)!r}"}), ns)  # noqa: S102
-    assert re.search(r"BYOD dataset refused: .*at least 8 are needed.*earlier sections are kept", capsys.readouterr().out)
+    with pytest.raises(ValueError, match=r"^[^:]+: the BYOD dataset has 4 records; at least 8 are needed.*earlier sections are kept") as refused:
+        exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(small)!r}"}), ns)  # noqa: S102
+    assert refused.value.dimer_refusal and refused.value._render_traceback_()[0].startswith("Refused: ")
     other = tmp_path / "bad"
     other.mkdir()
     bad = _byod_dir(other, 9)
-    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(bad)!r}", 'BYOD_CLASS_NAMES = ""': 'BYOD_CLASS_NAMES = "only-this"'}), ns)  # noqa: S102
-    assert re.search(r"BYOD dataset refused: .*label .* is not in class_names", capsys.readouterr().out)
-    exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': "BYOD_DATASET_DIR = 'no-such-dir'"}), ns)  # noqa: S102
-    assert "is not a directory" in capsys.readouterr().out
+    with pytest.raises(ValueError, match=r"label .* is not in class_names"):
+        exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': f"BYOD_DATASET_DIR = {str(bad)!r}", 'BYOD_CLASS_NAMES = ""': 'BYOD_CLASS_NAMES = "only-this"'}), ns)  # noqa: S102
+    with pytest.raises(ValueError, match=r"^no-such-dir: BYOD_DATASET_DIR is not a directory"):
+        exec(_byod_cell(notebook, **{"USE_BYOD_DATASET = False": "USE_BYOD_DATASET = True", 'BYOD_DATASET_DIR = ""': "BYOD_DATASET_DIR = 'no-such-dir'"}), ns)  # noqa: S102
     assert not (tmp_path / "byod_yolox_result.json").exists()
 
 
@@ -245,8 +246,9 @@ def test_m3_cancelled_or_multi_file_upload_stops_with_the_rule(notebook: dict, t
     google.colab = colab
     for name, module in (("google", google), ("google.colab", colab), ("google.colab.files", files)):
         monkeypatch.setitem(sys.modules, name, module)
-    exec(_byod_cell(notebook, **{"USE_BYOD_IMAGE = False": "USE_BYOD_IMAGE = True"}), ns)  # noqa: S102
-    assert f"BYOD image refused: Upload exactly one image (received {len(uploads)})" in capsys.readouterr().out
+    with pytest.raises(ValueError, match=rf"upload exactly one image \(received {len(uploads)}\)") as refused:
+        exec(_byod_cell(notebook, **{"USE_BYOD_IMAGE = False": "USE_BYOD_IMAGE = True"}), ns)  # noqa: S102
+    assert refused.value.file_name == (", ".join(uploads) or "(no file)")
 
 
 # ---- m3 (status half): STATUS.md, README and the record agree on the restarted hosted run ---------------------------
