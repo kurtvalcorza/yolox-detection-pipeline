@@ -1,0 +1,89 @@
+{
+  "repo": "yolox-detection-pipeline",
+  "sha": "2ec203129d43efa5abde9c544cacb57920266d3d",
+  "notebook": "tutorials/yolox_detection_finetune_colab.ipynb",
+  "blob": "a644491f011a988d9f25c2fc80b93f82ad3140f1",
+  "gpu": "T4",
+  "session": "suite-yolox-2ec2031-c7f4",
+  "started_utc": "2026-10-30T22:02:38+00:00",
+  "runner": "Colab CLI `colab exec -f` on a fresh session (not a browser Run all)",
+  "overrides": [
+    {
+      "name": "USE_BYOD_IMAGE",
+      "from": "False",
+      "to": "True"
+    },
+    {
+      "name": "BYOD_IMAGE_PATH",
+      "from": "\\\"\\\"",
+      "to": "'/etc/hostname'"
+    }
+  ],
+  "run_copy_blob": "c5d9dff55063f99d4d60d7c4770efe3128c1c1ce",
+  "run_copy_sha256": "e1162b53c8ac24fa4a517089a6ed245d46470e828b76a97dda5e1411a3607eb9",
+  "run_copy_note": "refusal run: the run copy is the committed notebook with the listed assignment overrides, cut immediately after the refusal cell and re-serialised (nbformat layout); input_unchanged compares against that copy",
+  "truncated_after_cell": "yolox_detection-54",
+  "refusal_cell_ref": "yolox_detection-54",
+  "refusal_cell_index": 25,
+  "cells_dropped": 1,
+  "code_cells_dropped": 0,
+  "original_sha256": "36a2132f2056b04ae9ffeae56dca730d37a1bfc87d2c8328354eb293729d5b11",
+  "status": "[suite-yolox-2ec2031-c7f4] gpu-t4-s-ass1c3-1ernmvu07v51p | Hardware: T4 | Shape: Standard | Variant: GPU | Status: IDLE",
+  "exec_exit_code": 0,
+  "stopped": true,
+  "stop_verified": true,
+  "wall_s": 151.1,
+  "input_unchanged": true,
+  "executed_file": "yolox_detection_finetune_colab_2ec2031_colab-cli-t4_output.ipynb",
+  "log_cells": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25
+  ],
+  "log_total": 25,
+  "code_cells": 25,
+  "executed_cells": 14,
+  "errors": [
+    {
+      "cell": "yolox_detection-54",
+      "ename": "IsolatedCellRefusal",
+      "evalue": "hostname: not an image Pillow can decode (UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x781d440db240>). Fix it and run this cell again; nothing was written for this input, earlier BYOD results were removed, and the outputs of the earlier sections are kept."
+    }
+  ],
+  "execution_counts": [],
+  "sequential": null,
+  "executed_sha256": "9c05613d5041e80296d2cf46a0f8011afd0c6527f70a69b311c7b800332734a1",
+  "log_sequential_complete": true,
+  "mode": "expect_refusal",
+  "refusal_line": "Refused: hostname: not an image Pillow can decode (UnidentifiedImageError: cannot identify image file <_io.BytesIO object at 0x781d440db240>). Fix it and run this cell again; nothing was written for this input, earlier BYOD results were removed, and the outputs of the earlier sections are kept.",
+  "halting_cell_index": 25,
+  "halting_cell_id": "yolox_detection-54",
+  "error_cells": [
+    25
+  ],
+  "refusal_fail_reasons": [],
+  "refusal_ok": true,
+  "verdict": "PASS"
+}
